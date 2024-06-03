@@ -5,11 +5,11 @@ defmodule Cemso.DownloaderTest do
 
   test "download file prototype" do
     # generate large file
-    large_data = :crypto.strong_rand_bytes(10_000_000) |> dbg()
-    source_file = Briefly.create!() |> dbg()
+    large_data = :crypto.strong_rand_bytes(10_000_000)
+    source_file = Briefly.create!()
     File.write!(source_file, large_data)
-    bypass = Bypass.open() |> dbg()
-    url = "http://localhost:#{bypass.port}" |> dbg()
+    bypass = Bypass.open()
+    url = "http://localhost:#{bypass.port}"
 
     Bypass.expect(bypass, fn conn ->
       IO.puts("called")
