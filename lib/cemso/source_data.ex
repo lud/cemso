@@ -22,6 +22,7 @@ defmodule Cemso.SourceData do
          :ok <- Downloader.download_file(url, temp_path),
          :ok <- check_sum(temp_path, md5),
          :ok <- File.rename(temp_path, dest_path) do
+      Logger.info("File download complete")
       :ok = check_sum(dest_path, md5)
     else
       {:ok, :already_in_cache} -> :ok
@@ -33,6 +34,7 @@ defmodule Cemso.SourceData do
     with true <- File.regular?(dest_path),
          _ = Logger.info("Found existing file: #{dest_path}"),
          :ok <- check_sum(dest_path, expected_md5) do
+      Logger.info("Validated cache")
       {:ok, :already_in_cache}
     else
       _ -> :error
@@ -45,7 +47,7 @@ defmodule Cemso.SourceData do
 
     actual =
       path
-      |> File.stream!([], 2048)
+      |> File.stream!(2048, [])
       |> Enum.reduce(hash, fn bytes, hash_state ->
         :crypto.hash_update(hash_state, bytes)
       end)
@@ -55,7 +57,6 @@ defmodule Cemso.SourceData do
     Logger.debug("Actual   md5 sum: #{actual}")
 
     if actual == expected do
-      Logger.info("File download complete")
       :ok
     else
       Logger.error("Checksum error")
