@@ -10,9 +10,15 @@ defmodule Cemso.SourceData do
     }
   }
 
+  defp cache_dir, do: Application.fetch_env!(:cemso, :cache_dir)
+
+  def download_path(key) do
+    Path.join(cache_dir(), "#{key}.bin")
+  end
+
   def download_source(key) do
     %{url: url, md5: md5} = Map.fetch!(@sources, key)
-    cache_dir = Application.fetch_env!(:cemso, :cache_dir)
+    cache_dir = cache_dir()
     File.mkdir_p!(cache_dir)
     temp_path = Path.join(cache_dir, "#{key}.dl")
     dest_path = Path.join(cache_dir, "#{key}.bin")
