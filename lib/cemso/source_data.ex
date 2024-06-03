@@ -22,7 +22,7 @@ defmodule Cemso.SourceData do
          :ok <- Downloader.download_file(url, temp_path),
          :ok <- check_sum(temp_path, md5),
          :ok <- File.rename(temp_path, dest_path) do
-      :ok
+      :ok = check_sum(dest_path, md5)
     else
       {:ok, :already_in_cache} -> :ok
       {:error, _} = err -> err
