@@ -6,7 +6,7 @@ defmodule Cemso.ConvertVec.BufferTest do
     file_contents = <<1, 2, 3, 4, 5, 6, 7, 8, 9, 10>>
     path = Briefly.create!()
     File.write!(path, file_contents)
-    assert {:ok, buf} = Buffer.open(path) |> dbg()
+    assert {:ok, buf} = Buffer.open(path)
     assert <<>> == buf.local
   end
 

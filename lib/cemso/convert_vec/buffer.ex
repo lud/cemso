@@ -15,7 +15,7 @@ defmodule Cemso.ConvertVec.Buffer do
         buf
 
       n ->
-        case IO.read(handle, n) do
+        case IO.binread(handle, n) do
           :eof -> buf
           data -> %{buf | local: <<local::binary, data::binary>>}
         end
