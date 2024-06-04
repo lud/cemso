@@ -13,15 +13,11 @@ defmodule Cemso.ConvertVec do
         {n_words, rest}
       end)
 
-    n_words |> IO.inspect(label: "n_words")
-
     {n_dimensions, buf} =
       Buffer.consume(buf, 256, fn bin ->
         {n_dimensions, "\n" <> rest} = Integer.parse(bin)
         {n_dimensions, rest}
       end)
-
-    n_dimensions |> IO.inspect(label: "n_dimensions")
 
     state = handler.(:wordcount, n_words, state)
     state = handler.(:dimensions, n_dimensions, state)
@@ -29,7 +25,6 @@ defmodule Cemso.ConvertVec do
     {state, buf} =
       Enum.reduce(1..n_words, {state, buf}, fn _, {state, buf} ->
         {word, dimensions, buf} = parse_word(buf, n_dimensions)
-        word |> IO.inspect(label: "word")
         state = handler.(:word, {word, dimensions}, state)
         {state, buf}
       end)

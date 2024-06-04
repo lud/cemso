@@ -7,9 +7,12 @@ defmodule Cemso.Application do
 
   @impl true
   def start(_type, _args) do
+    source = Application.fetch_env!(:cemso, :source)
+
     children = [
-      # Starts a worker by calling: Cemso.Worker.start_link(arg)
-      # {Cemso.Worker, arg}
+      {Registry, keys: :unique, name: Cemso.Reg},
+      {Cemso.WordsTable, source: source, name: {:via, Registry, {Cemso.Reg, :loader}}},
+      {Cemso.Solver, loader: {:via, Registry, {Cemso.Reg, :loader}}}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
