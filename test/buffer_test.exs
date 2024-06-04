@@ -38,4 +38,9 @@ defmodule Cemso.ConvertVec.BufferTest do
                {:retval, untouched}
              end)
   end
+
+  test "close" do
+    buf = buffer_from_bin("9999" <> <<1, 2, 3, 4>>)
+    assert :ok = Buffer.close(buf)
+  end
 end

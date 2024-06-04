@@ -27,4 +27,8 @@ defmodule Cemso.ConvertVec.Buffer do
     {return_val, remaining_local} = consumer.(buf.local)
     {return_val, %{buf | local: remaining_local}}
   end
+
+  def close(%{handle: handle}) do
+    File.close(handle)
+  end
 end

@@ -1,13 +1,12 @@
 defmodule Cemso.ConvertVec do
   alias Cemso.ConvertVec.Buffer
 
-  def bin2txt(input_path, output_path) do
-    with {:ok, buf} <- Buffer.open(input_path) do
-      {:ok, do_bin2txt(buf, output_path)}
-    end
+  def bin2txt(input_path, state, handler) do
+    {:ok, buf} = Buffer.open(input_path)
+    do_bin2txt(buf, state, handler)
   end
 
-  defp do_bin2txt(buf, output_path) do
+  defp do_bin2txt(buf, state, handler) do
     {n_words, buf} =
       Buffer.consume(buf, 256, fn bin ->
         {n_words, " " <> rest} = Integer.parse(bin)
@@ -24,12 +23,20 @@ defmodule Cemso.ConvertVec do
 
     n_dimensions |> IO.inspect(label: "n_dimensions")
 
-    1..n_words
-    |> Enum.reduce(buf, fn _, buf ->
-      {word, dimensions, buf} = parse_word(buf, n_dimensions)
-      word |> IO.inspect(label: "word")
-      buf
-    end)
+    state = handler.(:wordcount, n_words, state)
+    state = handler.(:dimensions, n_dimensions, state)
+
+    {state, buf} =
+      Enum.reduce(1..n_words, {state, buf}, fn _, {state, buf} ->
+        {word, dimensions, buf} = parse_word(buf, n_dimensions)
+        word |> IO.inspect(label: "word")
+        state = handler.(:word, {word, dimensions}, state)
+        {state, buf}
+      end)
+
+    Buffer.close(buf)
+
+    state
   end
 
   defp parse_word(buf, n_dimensions) do
