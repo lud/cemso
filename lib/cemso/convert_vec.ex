@@ -1,5 +1,5 @@
 defmodule Cemso.ConvertVec do
-  alias Cemso.ConvertVec.Buffer
+  alias Cemso.Utils.Buffer
 
   def bin2txt(input_path, state, handler) do
     {:ok, buf} = Buffer.open(input_path)

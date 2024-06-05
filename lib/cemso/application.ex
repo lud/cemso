@@ -11,6 +11,11 @@ defmodule Cemso.Application do
 
     children = [
       {Registry, keys: :unique, name: Cemso.Reg},
+      {Kota,
+       name: Cemantix.RateLimiter,
+       max_allow: 1,
+       range_ms: 200,
+       adapter: Kota.Bucket.DiscreteCounter},
       {Cemso.WordsTable, source: source, name: {:via, Registry, {Cemso.Reg, :loader}}},
       {Cemso.Solver, loader: {:via, Registry, {Cemso.Reg, :loader}}}
     ]

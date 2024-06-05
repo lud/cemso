@@ -1,7 +1,9 @@
 defmodule Cemso.WordsTable do
+  alias Cemso.Utils.TopList
   use GenServer
   require Logger
 
+  @tab __MODULE__
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
 
   def start_link(opts) do
@@ -13,11 +15,45 @@ defmodule Cemso.WordsTable do
     GenServer.call(server, {:subscribe, self()})
   end
 
+  def select_random(n) do
+    # generate a random number for each word and select the N smallest ones
+
+    fun = fn {word, _dims}, tl ->
+      TopList.put(tl, {:rand.uniform(), word})
+    end
+
+    toplist = :ets.foldl(fun, TopList.new(n, &Kernel.</2), @tab)
+
+    TopList.to_list(toplist, fn {_, word} -> word end)
+  end
+
+  def select_similar(word, n) do
+    [{^word, dimensions}] = :ets.lookup(@tab, word)
+
+    fun = fn {word, dims}, tl ->
+      distance = distance(dimensions, dims)
+      TopList.put(tl, {distance, word})
+    end
+
+    toplist = :ets.foldl(fun, TopList.new(n, fn {a, _}, {b, _} -> a < b end), @tab)
+
+    TopList.to_list(toplist, fn {_, word} -> word end)
+  end
+
+  defp distance(dims_a, dims_b),
+    do: distance(dims_a, dims_b, 0)
+
+  defp distance([ha | ta], [hb | tb], sum),
+    do: distance(ta, tb, sum + :math.pow(ha - hb, 2))
+
+  defp distance([], [], sum),
+    do: :math.sqrt(sum)
+
   @impl true
   def init(opts) do
     source = Keyword.fetch!(opts, :source)
     Logger.info("words table initializing")
-    tab = :ets.new(__MODULE__, [:set, :public, :named_table])
+    tab = :ets.new(@tab, [:ordered_set, :public, :named_table])
     state = %{source: source, status: :init, load_ref: nil, tab: tab, subscribers: []}
     {:ok, state, {:continue, :load_table}}
   end

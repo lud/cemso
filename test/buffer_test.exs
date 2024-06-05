@@ -1,5 +1,5 @@
-defmodule Cemso.ConvertVec.BufferTest do
-  alias Cemso.ConvertVec.Buffer
+defmodule Cemso.Utils.BufferTest do
+  alias Cemso.Utils.Buffer
   use ExUnit.Case, async: true
 
   test "can read from a file" do

@@ -1,4 +1,4 @@
-defmodule Cemso.ConvertVec.Buffer do
+defmodule Cemso.Utils.Buffer do
   defstruct handle: nil, local: <<>>
 
   def open(path) do
