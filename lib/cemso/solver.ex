@@ -91,6 +91,7 @@ defmodule Cemso.Solver do
         solver = %{solver | test_list: t, score_list: score_list}
 
         if score == 1 do
+          print_scores(solver)
           Logger.info("Found word for today: #{inspect(h)}", ansi_color: :light_green)
           :ok
         else

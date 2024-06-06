@@ -73,7 +73,7 @@ defmodule Cemso.WordsTable do
   @impl true
   def handle_info({load_ref, :ok}, %{load_ref: load_ref} = state) do
     state = %{state | load_ref: nil, status: :loaded}
-    true = Process.demonitor(load_ref, [:flush]) |> dbg()
+    true = Process.demonitor(load_ref, [:flush])
     {:noreply, maybe_publish(state)}
   end
 

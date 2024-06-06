@@ -34,7 +34,7 @@ defmodule Cemso.Utils.BufferTest do
              end)
 
     assert {:retval, %{local: <<2, 3, 4>>}} =
-             Buffer.consume(buf, 10000, fn untouched ->
+             Buffer.consume(buf, 10_000, fn untouched ->
                {:retval, untouched}
              end)
   end
