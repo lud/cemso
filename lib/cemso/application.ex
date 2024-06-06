@@ -22,7 +22,7 @@ defmodule Cemso.Application do
        range_ms: 200,
        adapter: Kota.Bucket.DiscreteCounter},
       {Cemso.IgnoreFile, name: via(:ignore_file), path: ignore_file, write_after: 250},
-      {Cemso.WordsTable, source: source, name: via(:loader)},
+      {Cemso.WordsTable, source: source, name: via(:loader), ignore_file: via(:ignore_file)},
       {Cemso.Solver, loader: via(:loader), ignore_file: via(:ignore_file)}
     ]
 

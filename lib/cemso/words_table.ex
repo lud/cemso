@@ -1,4 +1,5 @@
 defmodule Cemso.WordsTable do
+  alias Cemso.IgnoreFile
   alias Cemso.Utils.TopList
   use GenServer
   require Logger
@@ -52,15 +53,26 @@ defmodule Cemso.WordsTable do
   @impl true
   def init(opts) do
     source = Keyword.fetch!(opts, :source)
+    ignore_file = Keyword.fetch!(opts, :ignore_file)
     Logger.info("words table initializing")
     tab = :ets.new(@tab, [:ordered_set, :public, :named_table])
-    state = %{source: source, status: :init, load_ref: nil, tab: tab, subscribers: []}
+
+    state = %{
+      source: source,
+      status: :init,
+      load_ref: nil,
+      tab: tab,
+      subscribers: [],
+      ignore_file: ignore_file
+    }
+
     {:ok, state, {:continue, :load_table}}
   end
 
   @impl true
   def handle_continue(:load_table, %{status: :init} = state) do
-    load_ref = Task.async(fn -> do_load(state.source, state.tab) end).ref
+    ignored_words = state.ignore_file |> IgnoreFile.to_list() |> MapSet.new()
+    load_ref = Task.async(fn -> do_load(state.source, state.tab, ignored_words) end).ref
     {:noreply, %{state | load_ref: load_ref}}
   end
 
@@ -77,7 +89,7 @@ defmodule Cemso.WordsTable do
     {:noreply, maybe_publish(state)}
   end
 
-  defp do_load(source, tab) do
+  defp do_load(source, tab, ignored_words) do
     Cemso.SourceData.download_source(source)
     input_path = Cemso.SourceData.download_path(source)
 
@@ -90,7 +102,10 @@ defmodule Cemso.WordsTable do
           acc
 
         :word, {word, dimensions}, acc ->
-          true = :ets.insert(tab, {word, dimensions})
+          case MapSet.member?(ignored_words, word) do
+            true -> Logger.debug("Ignored word #{inspect(word)}")
+            false -> true = :ets.insert(tab, {word, dimensions})
+          end
 
           acc
       end)
