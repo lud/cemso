@@ -51,6 +51,6 @@ defmodule Cemso.Utils.TopListTest do
   test "drop" do
     toplist = TopList.new(5, &Kernel.>/2)
     toplist = Enum.reduce(10..1, toplist, fn item, toplist -> TopList.put(toplist, item) end)
-    assert [10, 8, 7, 6] = TopList.drop(toplist, 9)
+    assert [10, 8, 7, 6] = TopList.drop(toplist, 9) |> TopList.to_list()
   end
 end

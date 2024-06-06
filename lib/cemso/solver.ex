@@ -1,4 +1,5 @@
 defmodule Cemso.Solver do
+  alias Cemso.IgnoreFile
   alias Cemso.Utils.TopList
   alias Cemso.WordsTable
   require Logger
@@ -15,27 +16,34 @@ defmodule Cemso.Solver do
   @impl true
   def init(opts) do
     loader = Keyword.fetch!(opts, :loader)
+    ignore_file = Keyword.fetch!(opts, :ignore_file)
     :ok = WordsTable.subscribe(loader)
-    {:ok, %{}}
+    {:ok, %{ignore_file: ignore_file}}
   end
 
   @impl true
   def handle_info({WordsTable, :loaded}, state) do
     Logger.info("Solver starting to solve")
-    solve()
+    solve(state)
     {:noreply, state}
   end
 
-  defp solve() do
-    solver = %{test_list: [], score_list: TopList.new(40, &compare_score/2), closed_list: []}
-    solve(solver)
+  defp solve(state) do
+    solver = %{
+      test_list: [],
+      score_list: TopList.new(40, &compare_score/2),
+      closed_list: [],
+      ignore_file: state.ignore_file
+    }
+
+    loop(solver)
   end
 
   defmodule Attempt do
     defstruct word: nil, score: nil, expanded?: false
   end
 
-  defp solve(%{test_list: []} = solver) do
+  defp loop(%{test_list: []} = solver) do
     # Select first word not expanded yet. When none (at init of if exhausted) we
     # will select random words.
 
@@ -63,7 +71,7 @@ defmodule Cemso.Solver do
               list
           end
 
-        solve(%{solver | test_list: new_test_list})
+        loop(%{solver | test_list: new_test_list})
 
       [%Attempt{word: word, expanded?: false} = top] ->
         n_similar = 20
@@ -73,11 +81,11 @@ defmodule Cemso.Solver do
         new_score_list =
           solver.score_list |> TopList.drop(top) |> TopList.put(%Attempt{top | expanded?: true})
 
-        solve(%{solver | test_list: new_test_list, score_list: new_score_list})
+        loop(%{solver | test_list: new_test_list, score_list: new_score_list})
     end
   end
 
-  defp solve(%{test_list: [h | t]} = solver) do
+  defp loop(%{test_list: [h | t]} = solver) do
     # We have items in the test list. We score them one by one
     %{score_list: score_list, closed_list: closed_list} = solver
 
@@ -95,13 +103,14 @@ defmodule Cemso.Solver do
           Logger.info("Found word for today: #{inspect(h)}", ansi_color: :light_green)
           :ok
         else
-          solve(solver)
+          loop(solver)
         end
 
       # If the word is unknown we only remove from the test list
       {:error, :cemantix_unknown} ->
         Logger.warning("Unknow word #{h}")
-        solve(%{solver | test_list: t})
+        :ok = IgnoreFile.add(solver.ignore_file, h)
+        loop(%{solver | test_list: t})
     end
   end
 

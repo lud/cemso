@@ -7,7 +7,12 @@ defmodule Cemso.Application do
 
   @impl true
   def start(_type, _args) do
-    source = Application.fetch_env!(:cemso, :source)
+    %{
+      # TODO pass cache dir
+      # cache_dir: cache_dir,
+      source: source,
+      ignore_file: ignore_file
+    } = Application.get_all_env(:cemso) |> Map.new()
 
     children = [
       {Registry, keys: :unique, name: Cemso.Reg},
@@ -16,8 +21,9 @@ defmodule Cemso.Application do
        max_allow: 1,
        range_ms: 200,
        adapter: Kota.Bucket.DiscreteCounter},
-      {Cemso.WordsTable, source: source, name: {:via, Registry, {Cemso.Reg, :loader}}},
-      {Cemso.Solver, loader: {:via, Registry, {Cemso.Reg, :loader}}}
+      {Cemso.IgnoreFile, name: via(:ignore_file), path: ignore_file, write_after: 250},
+      {Cemso.WordsTable, source: source, name: via(:loader)},
+      {Cemso.Solver, loader: via(:loader), ignore_file: via(:ignore_file)}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
@@ -25,4 +31,6 @@ defmodule Cemso.Application do
     opts = [strategy: :one_for_one, name: Cemso.Supervisor]
     Supervisor.start_link(children, opts)
   end
+
+  defp via(key), do: {:via, Registry, {Cemso.Reg, key}}
 end
