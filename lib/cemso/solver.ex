@@ -111,6 +111,10 @@ defmodule Cemso.Solver do
         Logger.warning("Unknow word #{h}")
         :ok = IgnoreFile.add(solver.ignore_file, h)
         loop(%{solver | test_list: t})
+
+      {:error, message} ->
+        Logger.error(message)
+        loop(solver)
     end
   end
 
@@ -155,6 +159,12 @@ defmodule Cemso.Solver do
 
       {:ok, %Req.Response{status: 200, body: %{"score" => score}}} when is_number(score) ->
         {:ok, score}
+
+      {:error, reason} when is_exception(reason) ->
+        {:error, Exception.message(reason)}
+
+      {:error, reason} ->
+        {:error, "unknown error: #{inspect(reason)}"}
     end
   end
 
