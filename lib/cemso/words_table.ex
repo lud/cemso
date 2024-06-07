@@ -16,11 +16,15 @@ defmodule Cemso.WordsTable do
     GenServer.call(server, {:subscribe, self()})
   end
 
-  def select_random(n) do
+  def select_random(n, ignore_list) do
     # generate a random number for each word and select the N smallest ones
 
     fun = fn {word, _dims}, tl ->
-      TopList.put(tl, {:rand.uniform(), word})
+      if word in ignore_list do
+        tl
+      else
+        TopList.put(tl, {:rand.uniform(), word})
+      end
     end
 
     toplist = :ets.foldl(fun, TopList.new(n, &Kernel.</2), @tab)
@@ -28,12 +32,16 @@ defmodule Cemso.WordsTable do
     TopList.to_list(toplist, fn {_, word} -> word end)
   end
 
-  def select_similar(word, n) do
+  def select_similar(word, n, ignore_list) do
     [{^word, dimensions}] = :ets.lookup(@tab, word)
 
     fun = fn {word, dims}, tl ->
-      distance = distance(dimensions, dims)
-      TopList.put(tl, {distance, word})
+      if word in ignore_list do
+        tl
+      else
+        distance = distance(dimensions, dims)
+        TopList.put(tl, {distance, word})
+      end
     end
 
     toplist = :ets.foldl(fun, TopList.new(n, fn {a, _}, {b, _} -> a < b end), @tab)

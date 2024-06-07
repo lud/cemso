@@ -7,6 +7,11 @@ defmodule Cemso.SourceData do
       url:
         "https://embeddings.net/embeddings/frWac_non_lem_no_postag_no_phrase_200_skip_cut100.bin",
       md5: "6b8605bb1fc726f44a895bff26057bae"
+    },
+    frWac_non_lem_no_postag_no_phrase_500_skip_cut200: %{
+      url:
+        "https://embeddings.net/embeddings/frWac_non_lem_no_postag_no_phrase_500_skip_cut200.bin",
+      md5: "e2c626ef894a6d2ef2524880e1856558"
     }
   }
 

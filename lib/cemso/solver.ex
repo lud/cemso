@@ -31,7 +31,7 @@ defmodule Cemso.Solver do
   defp solve(state) do
     solver = %{
       test_list: [],
-      score_list: TopList.new(40, &compare_score/2),
+      score_list: TopList.new(60, &compare_score/2),
       closed_list: [],
       ignore_file: state.ignore_file
     }
@@ -57,7 +57,7 @@ defmodule Cemso.Solver do
         true =
           TopList.to_list(solver.score_list, fn %{expanded?: e?} -> e? end) |> Enum.all?(& &1)
 
-        n_rand = 20
+        n_rand = 10
         Logger.info("Selecting #{n_rand} random words")
 
         new_test_list =
@@ -74,12 +74,14 @@ defmodule Cemso.Solver do
         loop(%{solver | test_list: new_test_list})
 
       [%Attempt{word: word, expanded?: false} = top] ->
-        n_similar = 20
+        n_similar = 10
         Logger.info("Selecting #{n_similar} similar words to #{inspect(word)}")
         new_test_list = similar_words(word, n_similar, solver.closed_list)
 
         new_score_list =
-          solver.score_list |> TopList.drop(top) |> TopList.put(%Attempt{top | expanded?: true})
+          solver.score_list
+          |> TopList.drop(top)
+          |> TopList.put(%Attempt{top | expanded?: true})
 
         loop(%{solver | test_list: new_test_list, score_list: new_score_list})
     end
@@ -123,17 +125,11 @@ defmodule Cemso.Solver do
   end
 
   defp random_words(n_rand, known_words) do
-    (n_rand * 2)
-    |> WordsTable.select_random()
-    |> Enum.filter(fn word -> word not in known_words end)
-    |> Enum.take(n_rand)
+    WordsTable.select_random(n_rand, known_words)
   end
 
   defp similar_words(word, n_similar, known_words) do
-    word
-    |> WordsTable.select_similar(n_similar * 2)
-    |> Enum.filter(fn word -> word not in known_words end)
-    |> Enum.take(n_similar)
+    WordsTable.select_similar(word, n_similar * 2, known_words)
   end
 
   defp get_score(word) do
@@ -165,11 +161,15 @@ defmodule Cemso.Solver do
 
       {:error, reason} ->
         {:error, "unknown error: #{inspect(reason)}"}
+
+      {:ok, _} ->
+        {:error, "bad server response"}
     end
   end
 
   defp print_scores(solver) do
-    IO.puts(format_scores(solver))
+    Logger.flush()
+    Logger.info(["Scores:\n", format_scores(solver)])
   end
 
   defp format_scores(solver) do
