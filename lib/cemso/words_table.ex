@@ -55,15 +55,6 @@ defmodule Cemso.WordsTable do
     found
   end
 
-  # def distance(dims_a, dims_b),
-  #   do: distance(dims_a, dims_b, 0)
-
-  # defp distance([ha | ta], [hb | tb], sum),
-  #   do: distance(ta, tb, sum + :math.pow(ha - hb, 2))
-
-  # defp distance([], [], sum),
-  #   do: :math.sqrt(sum)
-
   def similarity(a, b) do
     ret =
       cosine_similarity(a, b)
@@ -81,7 +72,7 @@ defmodule Cemso.WordsTable do
     source = Keyword.fetch!(opts, :source)
     ignore_file = Keyword.fetch!(opts, :ignore_file)
     Logger.info("words table initializing")
-    tab = :ets.new(@tab, [:ordered_set, :public, :named_table])
+    tab = :ets.new(@tab, [:ordered_set, :public, :named_table, {:read_concurrency, true}])
 
     state = %{
       source: source,
