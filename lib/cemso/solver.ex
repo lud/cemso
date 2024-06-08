@@ -3,9 +3,19 @@ defmodule Cemso.Solver do
   alias Cemso.Utils.TopList
   alias Cemso.WordsTable
   require Logger
-  use GenServer
+  use GenServer, restart: :transient
 
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
+
+  @init_test_list ~w(
+    vie mort
+    homme femme enfant
+    art commerce industrie guerre
+    nation pays ville cité état
+    animal végétal champignon roche terre
+    agriculture nature biologie science physique chimie
+    distance altitude mesure métrique
+  )
 
   def start_link(opts) do
     Logger.info("Solver initialized")
@@ -17,23 +27,25 @@ defmodule Cemso.Solver do
   def init(opts) do
     loader = Keyword.fetch!(opts, :loader)
     ignore_file = Keyword.fetch!(opts, :ignore_file)
+    score_adapter = Keyword.fetch!(opts, :score_adapter)
     :ok = WordsTable.subscribe(loader)
-    {:ok, %{ignore_file: ignore_file}}
+    {:ok, %{ignore_file: ignore_file, score_adapter: score_adapter}}
   end
 
   @impl true
   def handle_info({WordsTable, :loaded}, state) do
     Logger.info("Solver starting to solve")
-    solve(state)
-    {:noreply, state}
+    solve(state) |> dbg()
+    {:stop, :normal, state}
   end
 
   defp solve(state) do
     solver = %{
-      test_list: [],
+      test_list: @init_test_list,
       score_list: TopList.new(60, &compare_score/2),
       closed_list: [],
-      ignore_file: state.ignore_file
+      ignore_file: state.ignore_file,
+      score_adapter: state.score_adapter
     }
 
     loop(solver)
@@ -94,15 +106,20 @@ defmodule Cemso.Solver do
     # we will not allow this word in the test list again
     solver = %{solver | closed_list: [h | closed_list]}
 
-    case get_score(h) do
+    case get_score(solver, h) do
       # If we get a score we add that to the score list and remove from the test list
       {:ok, score} ->
         score_list = TopList.put(score_list, %Attempt{word: h, score: score, expanded?: false})
         solver = %{solver | test_list: t, score_list: score_list}
 
-        if score == 1 do
+        # Local simulator may give score of 0.9999 instead of 1
+        if score > 0.999 do
           print_scores(solver)
-          Logger.info("Found word for today: #{inspect(h)}", ansi_color: :light_green)
+
+          Logger.info("Found word for today: #{inspect(h)} with score of #{score}",
+            ansi_color: :light_green
+          )
+
           :ok
         else
           loop(solver)
@@ -132,39 +149,43 @@ defmodule Cemso.Solver do
     WordsTable.select_similar(word, n_similar * 2, known_words)
   end
 
-  defp get_score(word) do
-    Logger.info("Requesting score for #{inspect(word)}")
-    :ok = Kota.await(Cemantix.RateLimiter)
+  defp get_score(solver, word) do
+    {mod, args} = solver.score_adapter
 
-    Req.post("https://cemantix.certitudes.org/score",
-      retry: false,
-      body: "word=#{word}",
-      headers: %{
-        "Content-Type" => "application/x-www-form-urlencoded",
-        "Origin" => "https://cemantix.certitudes.org",
-        "User-Agent" =>
-          "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-      }
-    )
-    |> case do
-      {:ok, %Req.Response{status: 200, body: %{"error" => "Je ne connais pas" <> _}}} ->
-        {:error, :cemantix_unknown}
+    apply(mod, :get_score, [word | args])
 
-      {:ok, %Req.Response{status: 200, body: "Je ne connais pas" <> _}} ->
-        {:error, :cemantix_unknown}
+    # Logger.info("Requesting score for #{inspect(word)}")
+    # :ok = Kota.await(Cemantix.RateLimiter)
 
-      {:ok, %Req.Response{status: 200, body: %{"score" => score}}} when is_number(score) ->
-        {:ok, score}
+    # Req.post("https://cemantix.certitudes.org/score",
+    #   retry: false,
+    #   body: "word=#{word}",
+    #   headers: %{
+    #     "Content-Type" => "application/x-www-form-urlencoded",
+    #     "Origin" => "https://cemantix.certitudes.org",
+    #     "User-Agent" =>
+    #       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    #   }
+    # )
+    # |> case do
+    #   {:ok, %Req.Response{status: 200, body: %{"error" => "Je ne connais pas" <> _}}} ->
+    #     {:error, :cemantix_unknown}
 
-      {:error, reason} when is_exception(reason) ->
-        {:error, Exception.message(reason)}
+    #   {:ok, %Req.Response{status: 200, body: "Je ne connais pas" <> _}} ->
+    #     {:error, :cemantix_unknown}
 
-      {:error, reason} ->
-        {:error, "unknown error: #{inspect(reason)}"}
+    #   {:ok, %Req.Response{status: 200, body: %{"score" => score}}} when is_number(score) ->
+    #     {:ok, score}
 
-      {:ok, _} ->
-        {:error, "bad server response"}
-    end
+    #   {:error, reason} when is_exception(reason) ->
+    #     {:error, Exception.message(reason)}
+
+    #   {:error, reason} ->
+    #     {:error, "unknown error: #{inspect(reason)}"}
+
+    #   {:ok, _} ->
+    #     {:error, "bad server response"}
+    # end
   end
 
   defp print_scores(solver) do

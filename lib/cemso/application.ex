@@ -22,8 +22,7 @@ defmodule Cemso.Application do
        range_ms: 200,
        adapter: Kota.Bucket.DiscreteCounter},
       {Cemso.IgnoreFile, name: via(:ignore_file), path: ignore_file, write_after: 250},
-      {Cemso.WordsTable, source: source, name: via(:loader), ignore_file: via(:ignore_file)},
-      {Cemso.Solver, loader: via(:loader), ignore_file: via(:ignore_file)}
+      {Cemso.WordsTable, source: source, name: via(:loader), ignore_file: via(:ignore_file)}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
@@ -32,5 +31,5 @@ defmodule Cemso.Application do
     Supervisor.start_link(children, opts)
   end
 
-  defp via(key), do: {:via, Registry, {Cemso.Reg, key}}
+  def via(key), do: {:via, Registry, {Cemso.Reg, key}}
 end

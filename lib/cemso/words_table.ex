@@ -3,6 +3,7 @@ defmodule Cemso.WordsTable do
   alias Cemso.Utils.TopList
   use GenServer
   require Logger
+  import Nx.Defn
 
   @tab __MODULE__
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
@@ -39,24 +40,41 @@ defmodule Cemso.WordsTable do
       if word in ignore_list do
         tl
       else
-        distance = distance(dimensions, dims)
-        TopList.put(tl, {distance, word})
+        similarity = similarity(dimensions, dims)
+        TopList.put(tl, {similarity, word})
       end
     end
 
-    toplist = :ets.foldl(fun, TopList.new(n, fn {a, _}, {b, _} -> a < b end), @tab)
+    toplist = :ets.foldl(fun, TopList.new(n, fn {a, _}, {b, _} -> a > b end), @tab)
 
     TopList.to_list(toplist, fn {_, word} -> word end)
   end
 
-  defp distance(dims_a, dims_b),
-    do: distance(dims_a, dims_b, 0)
+  def get_word(word) do
+    [{^word, _dimensions} = found] = :ets.lookup(@tab, word)
+    found
+  end
 
-  defp distance([ha | ta], [hb | tb], sum),
-    do: distance(ta, tb, sum + :math.pow(ha - hb, 2))
+  # def distance(dims_a, dims_b),
+  #   do: distance(dims_a, dims_b, 0)
 
-  defp distance([], [], sum),
-    do: :math.sqrt(sum)
+  # defp distance([ha | ta], [hb | tb], sum),
+  #   do: distance(ta, tb, sum + :math.pow(ha - hb, 2))
+
+  # defp distance([], [], sum),
+  #   do: :math.sqrt(sum)
+
+  def similarity(a, b) do
+    ret =
+      cosine_similarity(a, b)
+      |> Nx.to_number()
+
+    ret
+  end
+
+  defnp cosine_similarity(a, b) do
+    Nx.dot(a, b) / (Nx.LinAlg.norm(a) * Nx.LinAlg.norm(b))
+  end
 
   @impl true
   def init(opts) do
@@ -112,7 +130,8 @@ defmodule Cemso.WordsTable do
         :word, {word, dimensions}, acc ->
           case MapSet.member?(ignored_words, word) do
             true -> Logger.debug("Ignored word #{inspect(word)}")
-            false -> true = :ets.insert(tab, {word, dimensions})
+            # false -> true = :ets.insert(tab, {word, dimensions})
+            false -> true = :ets.insert(tab, {word, Nx.tensor(dimensions)})
           end
 
           acc
