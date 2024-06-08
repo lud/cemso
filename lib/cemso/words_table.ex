@@ -36,18 +36,44 @@ defmodule Cemso.WordsTable do
   def select_similar(word, n, ignore_list) do
     [{^word, dimensions}] = :ets.lookup(@tab, word)
 
-    fun = fn {word, dims}, tl ->
-      if word in ignore_list do
-        tl
-      else
-        similarity = similarity(dimensions, dims)
-        TopList.put(tl, {similarity, word})
-      end
-    end
+    Stream.unfold(:ets.first(@tab), fn
+      :"$end_of_table" ->
+        nil
 
-    toplist = :ets.foldl(fun, TopList.new(n, fn {a, _}, {b, _} -> a > b end), @tab)
+      prev ->
+        [{^prev, _} = elem] = :ets.lookup(@tab, prev)
+        {elem, :ets.next(@tab, prev)}
+    end)
+    |> Stream.filter(fn {word, _} -> word not in ignore_list end)
+    |> Stream.chunk_every(100)
+    |> Task.async_stream(
+      fn wordslist ->
+        Enum.map(wordslist, fn {word, dims} ->
+          similarity = similarity(dimensions, dims)
+          {word, similarity}
+        end)
+      end,
+      max_concurrency: 100,
+      ordered: false
+    )
+    |> Stream.flat_map(fn {:ok, list} -> list end)
+    |> Enum.reduce(TopList.new(n, fn {a, _}, {b, _} -> a > b end), fn
+      {word, similarity}, tl -> TopList.put(tl, {similarity, word})
+    end)
+    |> TopList.to_list(fn {_, word} -> word end)
 
-    TopList.to_list(toplist, fn {_, word} -> word end)
+    # fun = fn {word, dims}, tl ->
+    #   if word in ignore_list do
+    #     tl
+    #   else
+    #     similarity = similarity(dimensions, dims)
+    #     TopList.put(tl, {similarity, word})
+    #   end
+    # end
+
+    # toplist = :ets.foldl(fun, TopList.new(n, fn {a, _}, {b, _} -> a > b end), @tab)
+
+    # TopList.to_list(toplist, fn {_, word} -> word end)
   end
 
   def get_word(word) do

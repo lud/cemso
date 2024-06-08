@@ -7,15 +7,27 @@ defmodule Cemso.Solver do
 
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
 
+  # @init_test_list ~w(
+  #   vie mort
+  #   homme femme enfant
+  #   art commerce industrie guerre
+  #   nation pays ville cité état
+  #   animal végétal champignon roche terre
+  #   agriculture nature biologie science physique chimie
+  #   distance altitude mesure métrique
+  # )
   @init_test_list ~w(
-    vie mort
-    homme femme enfant
-    art commerce industrie guerre
-    nation pays ville cité état
-    animal végétal champignon roche terre
-    agriculture nature biologie science physique chimie
-    distance altitude mesure métrique
+    sonate
+    toccata
+    adagio
+    concerto
+    beethoven
+    brahms
+    haydn
+    quatuors
+    quintette
   )
+  @init_test_list []
 
   def start_link(opts) do
     Logger.info("Solver initialized")
@@ -35,7 +47,7 @@ defmodule Cemso.Solver do
   @impl true
   def handle_info({WordsTable, :loaded}, state) do
     Logger.info("Solver starting to solve")
-    solve(state) |> dbg()
+    solve(state)
     {:stop, :normal, state}
   end
 

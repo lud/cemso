@@ -19,7 +19,7 @@ defmodule Mix.Tasks.Find.Word do
   ]
 
   def run(argv) do
-    %{options: options} = CliMate.CLI.parse_or_halt!(argv, @command) |> dbg()
+    %{options: options} = CliMate.CLI.parse_or_halt!(argv, @command)
 
     solver_opts = [
       loader: Cemso.Application.via(:loader),

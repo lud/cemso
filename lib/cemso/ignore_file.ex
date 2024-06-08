@@ -28,7 +28,6 @@ defmodule Cemso.IgnoreFile do
         {:error, :enoent} ->
           Logger.info("Creating ignore file #{path}")
           :ok = File.touch!(path)
-          File.read!(path)
           []
 
         {:ok, contents} ->
@@ -65,8 +64,8 @@ defmodule Cemso.IgnoreFile do
     state.words
     |> Enum.map(&(&1 <> "\n"))
     |> Enum.into(File.stream!(state.path))
+    |> then(fn _ -> Logger.debug("wrote ignore file") end)
 
-    Logger.debug("wrote ignore file")
     :ok
   end
 

@@ -30,7 +30,7 @@ defmodule Cemso.SimEndpoint do
     receive do
       {WordsTable, :loaded} ->
         {^word, coords} = WordsTable.get_word(word)
-        {:noreply, Map.put(state, :coords, coords)} |> dbg()
+        {:noreply, Map.put(state, :coords, coords)}
     end
   end
 
