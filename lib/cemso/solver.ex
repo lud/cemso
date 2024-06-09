@@ -125,7 +125,7 @@ defmodule Cemso.Solver do
         solver = %{solver | test_list: t, score_list: score_list}
 
         # Local simulator may give score of 0.9999 instead of 1
-        if score > 0.999 do
+        if score > 0.9999 do
           print_scores(solver)
 
           Logger.info("Found word for today: #{inspect(h)} with score of #{score}",
