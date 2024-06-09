@@ -54,7 +54,7 @@ defmodule Cemso.Solver do
   defp solve(state) do
     solver = %{
       test_list: @init_test_list,
-      score_list: TopList.new(60, &compare_score/2),
+      score_list: TopList.new(20, &compare_score/2),
       closed_list: [],
       ignore_file: state.ignore_file,
       score_adapter: state.score_adapter
@@ -207,9 +207,18 @@ defmodule Cemso.Solver do
 
   defp format_scores(solver) do
     TopList.to_list(solver.score_list, fn %Attempt{word: word, score: score, expanded?: e?} ->
-      score = score |> to_string() |> String.slice(0..6) |> String.pad_trailing(8)
-      expanded = if(e?, do: "! ", else: "  ")
-      [score, expanded, word, "\n"]
+      str_score = score |> to_string() |> String.slice(0..6) |> String.pad_trailing(6, " ")
+      expanded = if(e?, do: "!", else: " ")
+      word = String.slice(word, 0..30) |> String.pad_trailing(30)
+      [score_emoji(score), "  ", str_score, " ", expanded, " ", word, "\n"]
     end)
   end
+
+  defp score_emoji(score) when score > 0.9999, do: "🥳"
+  defp score_emoji(score) when score >= 0.5760, do: "😱"
+  defp score_emoji(score) when score >= 0.4049, do: "🔥"
+  defp score_emoji(score) when score >= 0.2830, do: "🥵"
+  defp score_emoji(score) when score >= 0.1846, do: "😎"
+  defp score_emoji(score) when score >= 0, do: "🥶"
+  defp score_emoji(_), do: "🧊"
 end
