@@ -215,10 +215,10 @@ defmodule Cemso.Solver do
   end
 
   defp score_emoji(score) when score > 0.9999, do: "🥳"
-  defp score_emoji(score) when score >= 0.5760, do: "😱"
-  defp score_emoji(score) when score >= 0.4049, do: "🔥"
-  defp score_emoji(score) when score >= 0.2830, do: "🥵"
-  defp score_emoji(score) when score >= 0.1846, do: "😎"
+  defp score_emoji(score) when score >= 0.5, do: "😱"
+  defp score_emoji(score) when score >= 0.4, do: "🔥"
+  defp score_emoji(score) when score >= 0.2, do: "🥵"
+  defp score_emoji(score) when score >= 0.1, do: "😎"
   defp score_emoji(score) when score >= 0, do: "🥶"
   defp score_emoji(_), do: "🧊"
 end
