@@ -17,17 +17,28 @@ defmodule Cemso.Solver do
   #   distance altitude mesure métrique
   # )
   @init_test_list ~w(
-    sonate
-    toccata
-    adagio
-    concerto
-    beethoven
-    brahms
-    haydn
-    quatuors
-    quintette
+    émancipé
+    parentale
+    filiation
+    ex-conjoint
+    divorcés
+    parent
+    concubin
+    enfant
+    époux
+    divorce
+    concubinage
+    concubins
+    pacs
+    ex-époux
+    adoptifs
+    ascendants
+    conjugal
+    conjoint
+    civilement
   )
-  @init_test_list []
+
+  # @init_test_list []
 
   def start_link(opts) do
     Logger.info("Solver initialized")
@@ -54,13 +65,17 @@ defmodule Cemso.Solver do
   defp solve(state) do
     solver = %{
       test_list: @init_test_list,
-      score_list: TopList.new(20, &compare_score/2),
+      score_list: empty_score_list(),
       closed_list: [],
       ignore_file: state.ignore_file,
       score_adapter: state.score_adapter
     }
 
     loop(solver)
+  end
+
+  defp empty_score_list do
+    TopList.new(20, &compare_score/2)
   end
 
   defmodule Attempt do
@@ -95,7 +110,11 @@ defmodule Cemso.Solver do
               list
           end
 
-        loop(%{solver | test_list: new_test_list})
+        if [] != solver.closed_list do
+          Logger.warning("Resetting scores list")
+        end
+
+        loop(%{solver | test_list: new_test_list, score_list: empty_score_list()})
 
       [%Attempt{word: word, expanded?: false} = top] ->
         n_similar = 10
@@ -165,39 +184,6 @@ defmodule Cemso.Solver do
     {mod, args} = solver.score_adapter
 
     apply(mod, :get_score, [word | args])
-
-    # Logger.info("Requesting score for #{inspect(word)}")
-    # :ok = Kota.await(Cemantix.RateLimiter)
-
-    # Req.post("https://cemantix.certitudes.org/score",
-    #   retry: false,
-    #   body: "word=#{word}",
-    #   headers: %{
-    #     "Content-Type" => "application/x-www-form-urlencoded",
-    #     "Origin" => "https://cemantix.certitudes.org",
-    #     "User-Agent" =>
-    #       "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    #   }
-    # )
-    # |> case do
-    #   {:ok, %Req.Response{status: 200, body: %{"error" => "Je ne connais pas" <> _}}} ->
-    #     {:error, :cemantix_unknown}
-
-    #   {:ok, %Req.Response{status: 200, body: "Je ne connais pas" <> _}} ->
-    #     {:error, :cemantix_unknown}
-
-    #   {:ok, %Req.Response{status: 200, body: %{"score" => score}}} when is_number(score) ->
-    #     {:ok, score}
-
-    #   {:error, reason} when is_exception(reason) ->
-    #     {:error, Exception.message(reason)}
-
-    #   {:error, reason} ->
-    #     {:error, "unknown error: #{inspect(reason)}"}
-
-    #   {:ok, _} ->
-    #     {:error, "bad server response"}
-    # end
   end
 
   defp print_scores(solver) do

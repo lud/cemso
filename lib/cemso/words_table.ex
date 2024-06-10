@@ -3,7 +3,6 @@ defmodule Cemso.WordsTable do
   alias Cemso.Utils.TopList
   use GenServer
   require Logger
-  import Nx.Defn
 
   @tab __MODULE__
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
@@ -53,7 +52,7 @@ defmodule Cemso.WordsTable do
           {word, similarity}
         end)
       end,
-      max_concurrency: 100,
+      timeout: :infinity,
       ordered: false
     )
     |> Stream.flat_map(fn {:ok, list} -> list end)
@@ -61,19 +60,6 @@ defmodule Cemso.WordsTable do
       {word, similarity}, tl -> TopList.put(tl, {similarity, word})
     end)
     |> TopList.to_list(fn {_, word} -> word end)
-
-    # fun = fn {word, dims}, tl ->
-    #   if word in ignore_list do
-    #     tl
-    #   else
-    #     similarity = similarity(dimensions, dims)
-    #     TopList.put(tl, {similarity, word})
-    #   end
-    # end
-
-    # toplist = :ets.foldl(fun, TopList.new(n, fn {a, _}, {b, _} -> a > b end), @tab)
-
-    # TopList.to_list(toplist, fn {_, word} -> word end)
   end
 
   def get_word(word) do
@@ -82,15 +68,20 @@ defmodule Cemso.WordsTable do
   end
 
   def similarity(a, b) do
-    ret =
-      cosine_similarity(a, b)
-      |> Nx.to_number()
-
-    ret
+    cosine_similarity(a, b)
   end
 
-  defnp cosine_similarity(a, b) do
-    Nx.dot(a, b) / (Nx.LinAlg.norm(a) * Nx.LinAlg.norm(b))
+  def cosine_similarity(a, b) do
+    dot(normalize(a), normalize(b))
+  end
+
+  def dot(a, b) do
+    Enum.zip_reduce(a, b, 0, fn ai, bi, sum -> sum + ai * bi end)
+  end
+
+  def normalize(a) do
+    norm = Enum.reduce(a, 0, fn ai, sum -> sum + ai * ai end) |> :math.sqrt()
+    Enum.map(a, fn ai -> ai / norm end)
   end
 
   @impl true
@@ -147,8 +138,7 @@ defmodule Cemso.WordsTable do
         :word, {word, dimensions}, acc ->
           case MapSet.member?(ignored_words, word) do
             true -> Logger.debug("Ignored word #{inspect(word)}")
-            # false -> true = :ets.insert(tab, {word, dimensions})
-            false -> true = :ets.insert(tab, {word, Nx.tensor(dimensions)})
+            false -> true = :ets.insert(tab, {word, dimensions})
           end
 
           acc
