@@ -7,38 +7,7 @@ defmodule Cemso.Solver do
 
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
 
-  # @init_test_list ~w(
-  #   vie mort
-  #   homme femme enfant
-  #   art commerce industrie guerre
-  #   nation pays ville cité état
-  #   animal végétal champignon roche terre
-  #   agriculture nature biologie science physique chimie
-  #   distance altitude mesure métrique
-  # )
-  @init_test_list ~w(
-    émancipé
-    parentale
-    filiation
-    ex-conjoint
-    divorcés
-    parent
-    concubin
-    enfant
-    époux
-    divorce
-    concubinage
-    concubins
-    pacs
-    ex-époux
-    adoptifs
-    ascendants
-    conjugal
-    conjoint
-    civilement
-  )
-
-  # @init_test_list []
+  @init_test_list []
 
   def start_link(opts) do
     Logger.info("Solver initialized")
