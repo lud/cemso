@@ -48,7 +48,7 @@ defmodule Cemso.Solver do
   end
 
   defmodule Attempt do
-    defstruct word: nil, score: nil, expanded?: false
+    defstruct word: nil, score: nil, expanded?: false, from: []
   end
 
   defp loop(%{test_list: []} = solver) do
@@ -62,9 +62,6 @@ defmodule Cemso.Solver do
     |> Enum.take(1)
     |> case do
       [] ->
-        true =
-          TopList.to_list(solver.score_list, fn %{expanded?: e?} -> e? end) |> Enum.all?(& &1)
-
         n_rand = 10
         Logger.info("Selecting #{n_rand} random words")
 
@@ -78,17 +75,18 @@ defmodule Cemso.Solver do
             list ->
               list
           end
+          |> from_random()
 
         if [] != solver.closed_list do
           Logger.warning("Resetting scores list")
         end
 
-        loop(%{solver | test_list: new_test_list, score_list: empty_score_list()})
+        loop(%{solver | test_list: new_test_list, score_list: empty_score_list()}) |> dbg()
 
       [%Attempt{word: word, expanded?: false} = top] ->
         n_similar = 10
         Logger.info("Selecting #{n_similar} similar words to #{inspect(word)}")
-        new_test_list = similar_words(word, n_similar, solver.closed_list)
+        new_test_list = similar_words(top, n_similar, solver.closed_list)
 
         new_score_list =
           solver.score_list
@@ -99,24 +97,24 @@ defmodule Cemso.Solver do
     end
   end
 
-  defp loop(%{test_list: [h | t]} = solver) do
+  defp loop(%{test_list: [%Attempt{word: head_word} = h | t]} = solver) do
     # We have items in the test list. We score them one by one
     %{score_list: score_list, closed_list: closed_list} = solver
 
     # we will not allow this word in the test list again
-    solver = %{solver | closed_list: [h | closed_list]}
+    solver = %{solver | closed_list: [head_word | closed_list]}
 
     case get_score(solver, h) do
       # If we get a score we add that to the score list and remove from the test list
       {:ok, score} ->
-        score_list = TopList.put(score_list, %Attempt{word: h, score: score, expanded?: false})
+        score_list = TopList.put(score_list, %Attempt{h | score: score})
         solver = %{solver | test_list: t, score_list: score_list}
 
         # Local simulator may give score of 0.9999 instead of 1
         if score > 0.9999 do
           print_scores(solver)
 
-          Logger.info("Found word for today: #{inspect(h)} with score of #{score}",
+          Logger.info("Found word for today: #{inspect(head_word)} with score of #{score}",
             ansi_color: :light_green
           )
 
@@ -127,8 +125,8 @@ defmodule Cemso.Solver do
 
       # If the word is unknown we only remove from the test list
       {:error, :cemantix_unknown} ->
-        Logger.warning("Unknow word #{h}")
-        :ok = IgnoreFile.add(solver.ignore_file, h)
+        Logger.warning("Unknow word #{head_word}")
+        :ok = IgnoreFile.add(solver.ignore_file, head_word)
         loop(%{solver | test_list: t})
 
       {:error, message} ->
@@ -145,11 +143,13 @@ defmodule Cemso.Solver do
     WordsTable.select_random(n_rand, known_words)
   end
 
-  defp similar_words(word, n_similar, known_words) do
-    WordsTable.select_similar(word, n_similar * 2, known_words)
+  defp similar_words(%Attempt{word: parent_word} = parent, n_similar, known_words) do
+    parent_word
+    |> WordsTable.select_similar(n_similar * 2, known_words)
+    |> from_parent(parent)
   end
 
-  defp get_score(solver, word) do
+  defp get_score(solver, %Attempt{word: word} = _test_attempt) do
     {mod, args} = solver.score_adapter
 
     apply(mod, :get_score, [word | args])
@@ -161,11 +161,12 @@ defmodule Cemso.Solver do
   end
 
   defp format_scores(solver) do
-    TopList.to_list(solver.score_list, fn %Attempt{word: word, score: score, expanded?: e?} ->
-      str_score = score |> to_string() |> String.slice(0..6) |> String.pad_trailing(6, " ")
+    TopList.to_list(solver.score_list, fn %Attempt{word: word, score: score, expanded?: e?, from: parent_words} ->
+      str_score = score |> to_string() |> String.slice(0..4) |> String.pad_trailing(5, "0")
       expanded = if(e?, do: "!", else: " ")
-      word = String.slice(word, 0..30) |> String.pad_trailing(30)
-      [score_emoji(score), "  ", str_score, " ", expanded, " ", word, "\n"]
+      word = String.slice(word, 0..20) |> String.pad_trailing(20)
+      parents = Enum.intersperse(parent_words, " <- ")
+      [score_emoji(score), "  ", str_score, " ", expanded, " ", word, " <- ", parents, "\n"]
     end)
   end
 
@@ -176,4 +177,15 @@ defmodule Cemso.Solver do
   defp score_emoji(score) when score >= 0.1, do: "😎"
   defp score_emoji(score) when score >= 0, do: "🥶"
   defp score_emoji(_), do: "🧊"
+
+  defp from_random(words) do
+    Enum.map(words, &%Attempt{word: &1, expanded?: false, from: ["*"], score: nil})
+  end
+
+  defp from_parent(words, %Attempt{word: parent_word, from: parent_from}) do
+    Enum.map(
+      words,
+      &%Attempt{word: &1, expanded?: false, from: [parent_word | parent_from], score: nil}
+    )
+  end
 end
