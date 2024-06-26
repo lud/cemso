@@ -161,7 +161,12 @@ defmodule Cemso.Solver do
   end
 
   defp format_scores(solver) do
-    TopList.to_list(solver.score_list, fn %Attempt{word: word, score: score, expanded?: e?, from: parent_words} ->
+    TopList.to_list(solver.score_list, fn %Attempt{
+                                            word: word,
+                                            score: score,
+                                            expanded?: e?,
+                                            from: parent_words
+                                          } ->
       str_score = score |> to_string() |> String.slice(0..4) |> String.pad_trailing(5, "0")
       expanded = if(e?, do: "!", else: " ")
       word = String.slice(word, 0..20) |> String.pad_trailing(20)

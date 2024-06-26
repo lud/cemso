@@ -23,13 +23,14 @@ defmodule Cemso.MixProject do
       # App
       {:req, "~> 0.5.0"},
       {:kota, "~> 0.1.0"},
-      {:cli_mate, "~> 0.3.0"},
+      {:cli_mate, "~> 0.5"},
 
       # Test
       {:bypass, "~> 2.1", only: :test},
       {:briefly, "~> 0.5.1"},
 
-      # QA
+      # Dev
+      {:ex_doc, ">= 0.0.0"},
       {:credo, "~> 1.7"}
     ]
   end
