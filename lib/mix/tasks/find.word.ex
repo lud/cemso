@@ -18,6 +18,13 @@ defmodule Mix.Tasks.Find.Word do
         Use the provided word as the correct answer.
         """,
         doc_arg: "word"
+      ],
+      init: [
+        type: :string,
+        doc: """
+        A list of words to start with, separated by commas and/or spaces.
+        """,
+        doc_arg: "word1,word2"
       ]
     ]
   ]
@@ -33,7 +40,8 @@ defmodule Mix.Tasks.Find.Word do
 
     solver_opts = [
       loader: Cemso.Application.via(:loader),
-      ignore_file: Cemso.Application.via(:ignore_file)
+      ignore_file: Cemso.Application.via(:ignore_file),
+      init_list: parse_test_list(options[:init])
     ]
 
     solver_opts =
@@ -58,5 +66,9 @@ defmodule Mix.Tasks.Find.Word do
     receive do
       {:DOWN, ^ref, :process, ^solver, _} -> :ok
     end
+  end
+
+  defp parse_test_list(words) when is_binary(words) do
+    String.split(words, ~r/[, ]/, trim: true)
   end
 end

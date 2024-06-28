@@ -7,8 +7,6 @@ defmodule Cemso.Solver do
 
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
 
-  @init_test_list []
-
   def start_link(opts) do
     Logger.info("Solver initialized")
     {gen_opts, opts} = Keyword.split(opts, @gen_opts)
@@ -20,8 +18,9 @@ defmodule Cemso.Solver do
     loader = Keyword.fetch!(opts, :loader)
     ignore_file = Keyword.fetch!(opts, :ignore_file)
     score_adapter = Keyword.fetch!(opts, :score_adapter)
+    init_list = opts |> Keyword.fetch!(:init_list) |> from_opts()
     :ok = WordsTable.subscribe(loader)
-    {:ok, %{ignore_file: ignore_file, score_adapter: score_adapter}}
+    {:ok, %{ignore_file: ignore_file, score_adapter: score_adapter, init_list: init_list}}
   end
 
   @impl true
@@ -33,7 +32,7 @@ defmodule Cemso.Solver do
 
   defp solve(state) do
     solver = %{
-      test_list: @init_test_list,
+      test_list: state.init_list,
       score_list: empty_score_list(),
       closed_list: [],
       ignore_file: state.ignore_file,
@@ -81,7 +80,7 @@ defmodule Cemso.Solver do
           Logger.warning("Resetting scores list")
         end
 
-        loop(%{solver | test_list: new_test_list, score_list: empty_score_list()}) |> dbg()
+        loop(%{solver | test_list: new_test_list, score_list: empty_score_list()})
 
       [%Attempt{word: word, expanded?: false} = top] ->
         n_similar = 10
@@ -182,6 +181,10 @@ defmodule Cemso.Solver do
   defp score_emoji(score) when score >= 0.1, do: "😎"
   defp score_emoji(score) when score >= 0, do: "🥶"
   defp score_emoji(_), do: "🧊"
+
+  defp from_opts(words) do
+    Enum.map(words, &%Attempt{word: &1, expanded?: false, from: ["--init"], score: nil})
+  end
 
   defp from_random(words) do
     Enum.map(words, &%Attempt{word: &1, expanded?: false, from: ["*"], score: nil})
