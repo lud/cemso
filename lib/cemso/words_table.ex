@@ -35,7 +35,46 @@ defmodule Cemso.WordsTable do
   def select_similar(word, n, ignore_list) do
     [{^word, dimensions}] = :ets.lookup(@tab, word)
 
-    Stream.unfold(:ets.first(@tab), fn
+    tl =
+      parallel_map(
+        fn {word, dims} ->
+          similarity = similarity(dimensions, dims)
+          {similarity, word}
+        end,
+        fn {a, _}, {b, _} -> a > b end,
+        n,
+        ignore_list
+      )
+
+    TopList.to_list(tl, fn {_, word} -> word end)
+  end
+
+  # Select words who ave a similarity close to best_similarity
+  def select_at_range(word, best_similarity, n, ignore_list) do
+    [{^word, dimensions}] = :ets.lookup(@tab, word)
+
+    tl =
+      parallel_map(
+        fn {word, dims} ->
+          similarity = similarity(dimensions, dims)
+          proximity = abs(similarity - best_similarity)
+          {proximity, word}
+        end,
+        fn {a, _}, {b, _} -> a < b end,
+        n,
+        ignore_list
+      )
+
+    TopList.to_list(tl, fn {_, word} -> word end)
+  end
+
+  defp parallel_map(mapper, comparator, n, ignore_list) do
+    # Start with the first key in the table.
+    :ets.first(@tab)
+
+    # For each key in the table we will return the tuple of word+dimensions,
+    # and the next key. Stop when the key is $end_of_table.
+    |> Stream.unfold(fn
       :"$end_of_table" ->
         nil
 
@@ -43,23 +82,28 @@ defmodule Cemso.WordsTable do
         [{^prev, _} = elem] = :ets.lookup(@tab, prev)
         {elem, :ets.next(@tab, prev)}
     end)
+
+    # Ignore the words from the ignore list. We do not do that in the async
+    # stream to avoid copying the list on each async task.
     |> Stream.filter(fn {word, _} -> word not in ignore_list end)
+
+    # Split the stream in chunks of N words to send to an async task.
     |> Stream.chunk_every(100)
-    |> Task.async_stream(
-      fn wordslist ->
-        Enum.map(wordslist, fn {word, dims} ->
-          similarity = similarity(dimensions, dims)
-          {word, similarity}
-        end)
-      end,
+
+    # For each chunk, start an async task and apply the mapper to the
+    # word+dimensions tuple.
+    |> Task.async_stream(fn words -> Enum.map(words, mapper) end,
       timeout: :infinity,
       ordered: false
     )
+
+    # Unwrap the task
     |> Stream.flat_map(fn {:ok, list} -> list end)
-    |> Enum.reduce(TopList.new(n, fn {a, _}, {b, _} -> a > b end), fn
-      {word, similarity}, tl -> TopList.put(tl, {similarity, word})
+
+    # Reduce to the top list and return it
+    |> Enum.reduce(TopList.new(n, comparator), fn mapped_result, tl ->
+      TopList.put(tl, mapped_result)
     end)
-    |> TopList.to_list(fn {_, word} -> word end)
   end
 
   def get_word(word) do
@@ -127,24 +171,28 @@ defmodule Cemso.WordsTable do
     Cemso.SourceData.download_source(source)
     input_path = Cemso.SourceData.download_path(source)
 
-    :ok =
+    ignored_count =
       Cemso.ConvertVec.bin2txt(input_path, :initial, fn
         :wordcount, wordcount, :initial ->
           Logger.info("Loading #{wordcount} words into memory")
+          _ignored_count = 0
 
-        :dimensions, _dimensions, acc ->
-          acc
+        :dimensions, _dimensions, ignored_count ->
+          ignored_count
 
-        :word, {word, dimensions}, acc ->
+        :word, {word, dimensions}, ignored_count ->
           case MapSet.member?(ignored_words, word) do
-            true -> Logger.debug("Ignored word #{inspect(word)}")
-            false -> true = :ets.insert(tab, {word, dimensions})
-          end
+            false ->
+              true = :ets.insert(tab, {word, dimensions})
+              ignored_count
 
-          acc
+            true ->
+              # Logger.debug("Ignored word #{inspect(word)}")
+              ignored_count + 1
+          end
       end)
 
-    Logger.info("Loading words completed")
+    Logger.info("Loading words completed, ignored #{ignored_count} words")
     :ok
   end
 

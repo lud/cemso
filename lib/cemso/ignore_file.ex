@@ -34,13 +34,13 @@ defmodule Cemso.IgnoreFile do
           String.split(contents, "\n", trim: true)
       end
 
-    {:ok, %{words: words, path: path, write_after: write_after}}
+    {:ok, %{words: words, path: path, write_after: write_after, tainted: false}}
   end
 
   @impl true
   def handle_call({:add, word}, from, state) do
     GenServer.reply(from, :ok)
-    state = %{state | words: insert(state.words, word)}
+    state = %{state | words: insert(state.words, word), tainted: true}
     {:noreply, state, state.write_after}
   end
 
@@ -51,8 +51,11 @@ defmodule Cemso.IgnoreFile do
 
   @impl true
   def handle_info(:timeout, state) do
-    :ok = write_file(state)
-    {:noreply, state, :infinity}
+    if state.tainted do
+      :ok = write_file(state)
+    end
+
+    {:noreply, %{state | tainted: false}, :infinity}
   end
 
   @impl true

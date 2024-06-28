@@ -18,9 +18,12 @@ defmodule Cemso.Solver do
     loader = Keyword.fetch!(opts, :loader)
     ignore_file = Keyword.fetch!(opts, :ignore_file)
     score_adapter = Keyword.fetch!(opts, :score_adapter)
+    fast = Keyword.get(opts, :fast, false)
     init_list = opts |> Keyword.fetch!(:init_list) |> from_opts()
     :ok = WordsTable.subscribe(loader)
-    {:ok, %{ignore_file: ignore_file, score_adapter: score_adapter, init_list: init_list}}
+
+    {:ok,
+     %{ignore_file: ignore_file, score_adapter: score_adapter, init_list: init_list, fast: fast}}
   end
 
   @impl true
@@ -33,6 +36,7 @@ defmodule Cemso.Solver do
   defp solve(state) do
     solver = %{
       test_list: state.init_list,
+      fast: state.fast,
       score_list: empty_score_list(),
       closed_list: [],
       ignore_file: state.ignore_file,
@@ -85,7 +89,7 @@ defmodule Cemso.Solver do
       [%Attempt{word: word, expanded?: false} = top] ->
         n_similar = 10
         Logger.info("Selecting #{n_similar} similar words to #{inspect(word)}")
-        new_test_list = similar_words(top, n_similar, solver.closed_list)
+        new_test_list = related_words(top, n_similar, solver.closed_list, solver.fast)
 
         new_score_list =
           solver.score_list
@@ -142,10 +146,14 @@ defmodule Cemso.Solver do
     WordsTable.select_random(n_rand, known_words)
   end
 
-  defp similar_words(%Attempt{word: parent_word} = parent, n_similar, known_words) do
-    parent_word
-    |> WordsTable.select_similar(n_similar * 2, known_words)
-    |> from_parent(parent)
+  defp related_words(parent, n_similar, known_words, fast?) do
+    selected =
+      case fast? do
+        true -> WordsTable.select_at_range(parent.word, parent.score, n_similar, known_words)
+        false -> WordsTable.select_similar(parent.word, n_similar, known_words)
+      end
+
+    from_parent(selected, parent)
   end
 
   defp get_score(solver, %Attempt{word: word} = _test_attempt) do
