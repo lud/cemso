@@ -49,7 +49,7 @@ defmodule Cemso.WordsTable do
     TopList.to_list(tl, fn {_, word} -> word end)
   end
 
-  # Select words who ave a similarity close to best_similarity
+  # Select words who have a similarity close to best_similarity
   def select_at_range(word, best_similarity, n, ignore_list) do
     [{^word, dimensions}] = :ets.lookup(@tab, word)
 
@@ -60,6 +60,37 @@ defmodule Cemso.WordsTable do
           proximity = abs(similarity - best_similarity)
           {proximity, word}
         end,
+        fn {a, _}, {b, _} -> a < b end,
+        n,
+        ignore_list
+      )
+
+    TopList.to_list(tl, fn {_, word} -> word end)
+  end
+
+  # Select words who have, for each word, a similar reciprocal similarity
+  def select_at_range_multi(words_scores, n, ignore_list) do
+    targets =
+      Enum.map(words_scores, fn {word, score} ->
+        [{^word, dimensions}] = :ets.lookup(@tab, word)
+        {word, dimensions, score}
+      end)
+
+    target_count = length(words_scores)
+
+    tl =
+      parallel_map(
+        fn {word, dims} ->
+          range_proximity =
+            Enum.reduce(targets, 0, fn {_t_word, t_dimensions, t_score}, sum ->
+              similarity = similarity(t_dimensions, dims)
+              proximity_of_range = abs(similarity - t_score)
+              sum + proximity_of_range
+            end)
+
+          {range_proximity / target_count, word}
+        end,
+        # We want the minimum proximity
         fn {a, _}, {b, _} -> a < b end,
         n,
         ignore_list
@@ -92,7 +123,10 @@ defmodule Cemso.WordsTable do
 
     # For each chunk, start an async task and apply the mapper to the
     # word+dimensions tuple.
-    |> Task.async_stream(fn words -> Enum.map(words, mapper) end,
+    |> Task.async_stream(
+      fn words ->
+        Enum.map(words, mapper)
+      end,
       timeout: :infinity,
       ordered: false
     )
