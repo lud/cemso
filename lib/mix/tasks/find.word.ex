@@ -10,6 +10,13 @@ defmodule Mix.Tasks.Find.Word do
   @command [
     name: "mix find.word",
     options: [
+      init: [
+        type: :string,
+        doc: """
+        A list of words to start with, separated by commas and/or spaces.
+        """,
+        doc_arg: "word1,word2"
+      ],
       simulate: [
         type: :string,
         doc: """
@@ -19,12 +26,10 @@ defmodule Mix.Tasks.Find.Word do
         """,
         doc_arg: "word"
       ],
-      init: [
-        type: :string,
-        doc: """
-        A list of words to start with, separated by commas and/or spaces.
-        """,
-        doc_arg: "word1,word2"
+      fast: [
+        type: :boolean,
+        default: false,
+        doc: "Uses a fast but cheating algorithm."
       ]
     ]
   ]
@@ -41,7 +46,8 @@ defmodule Mix.Tasks.Find.Word do
     solver_opts = [
       loader: Cemso.Application.via(:loader),
       ignore_file: Cemso.Application.via(:ignore_file),
-      init_list: parse_test_list(options[:init])
+      init_list: parse_test_list(options[:init]),
+      fast: options.fast
     ]
 
     solver_opts =
@@ -70,5 +76,9 @@ defmodule Mix.Tasks.Find.Word do
 
   defp parse_test_list(words) when is_binary(words) do
     String.split(words, ~r/[, ]/, trim: true)
+  end
+
+  defp parse_test_list(nil) do
+    []
   end
 end

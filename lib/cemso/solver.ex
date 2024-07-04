@@ -18,9 +18,12 @@ defmodule Cemso.Solver do
     loader = Keyword.fetch!(opts, :loader)
     ignore_file = Keyword.fetch!(opts, :ignore_file)
     score_adapter = Keyword.fetch!(opts, :score_adapter)
+    fast = Keyword.get(opts, :fast, false)
     init_list = opts |> Keyword.fetch!(:init_list) |> from_opts()
     :ok = WordsTable.subscribe(loader)
-    {:ok, %{ignore_file: ignore_file, score_adapter: score_adapter, init_list: init_list}}
+
+    {:ok,
+     %{ignore_file: ignore_file, score_adapter: score_adapter, init_list: init_list, fast: fast}}
   end
 
   @impl true
@@ -33,7 +36,8 @@ defmodule Cemso.Solver do
   defp solve(state) do
     solver = %{
       test_list: state.init_list,
-      score_list: empty_score_list(),
+      fast: state.fast,
+      score_list: empty_score_list(state.fast),
       closed_list: [],
       ignore_file: state.ignore_file,
       score_adapter: state.score_adapter
@@ -42,7 +46,11 @@ defmodule Cemso.Solver do
     loop(solver)
   end
 
-  defp empty_score_list do
+  defp empty_score_list(true = _fast) do
+    TopList.new(5, &compare_score/2)
+  end
+
+  defp empty_score_list(false = _fast) do
     TopList.new(20, &compare_score/2)
   end
 
@@ -50,9 +58,8 @@ defmodule Cemso.Solver do
     defstruct word: nil, score: nil, expanded?: false, from: []
   end
 
-  defp loop(%{test_list: []} = solver) do
-    # Select first word not expanded yet. When none (at init of if exhausted) we
-    # will select random words.
+  defp loop(%{fast: false, test_list: []} = solver) do
+    # Take first word not expanded yet and select similar words
 
     print_scores(solver)
 
@@ -61,26 +68,10 @@ defmodule Cemso.Solver do
     |> Enum.take(1)
     |> case do
       [] ->
-        n_rand = 10
-        Logger.info("Selecting #{n_rand} random words")
-
-        new_test_list =
-          case random_words(n_rand, solver.closed_list) do
-            [] ->
-              Logger.error("Exhausted all random words")
-              System.stop()
-              Process.sleep(:infinity)
-
-            list ->
-              list
-          end
-          |> from_random()
-
-        if [] != solver.closed_list do
-          Logger.warning("Resetting scores list")
-        end
-
-        loop(%{solver | test_list: new_test_list, score_list: empty_score_list()})
+        solver
+        |> reset_test_list()
+        |> reset_score_list()
+        |> loop()
 
       [%Attempt{word: word, expanded?: false} = top] ->
         n_similar = 10
@@ -96,6 +87,31 @@ defmodule Cemso.Solver do
     end
   end
 
+  defp loop(%{fast: true, test_list: []} = solver) do
+    # Take all words from list and select words at range
+
+    print_scores(solver)
+
+    solver.score_list
+    |> TopList.to_list(&{&1.word, &1.score})
+    |> case do
+      [] ->
+        solver
+        |> reset_test_list()
+        |> reset_score_list()
+        |> loop()
+
+      all_known_scored_words ->
+        n_at_range = 10
+        Logger.info("Selecting #{n_at_range} words at best range")
+
+        new_test_list =
+          words_at_range_multi(all_known_scored_words, n_at_range, solver.closed_list)
+
+        loop(%{solver | test_list: new_test_list})
+    end
+  end
+
   defp loop(%{test_list: [%Attempt{word: head_word} = h | t]} = solver) do
     # We have items in the test list. We score them one by one
     %{score_list: score_list, closed_list: closed_list} = solver
@@ -106,16 +122,14 @@ defmodule Cemso.Solver do
     case get_score(solver, h) do
       # If we get a score we add that to the score list and remove from the test list
       {:ok, score} ->
-        score_list = TopList.put(score_list, %Attempt{h | score: score})
+        attempt = %Attempt{h | score: score}
+        score_list = TopList.put(score_list, attempt)
         solver = %{solver | test_list: t, score_list: score_list}
 
         # Local simulator may give score of 0.9999 instead of 1
         if score > 0.9999 do
           print_scores(solver)
-
-          Logger.info("Found word for today: #{inspect(head_word)} with score of #{score}",
-            ansi_color: :light_green
-          )
+          show_success(attempt)
 
           :ok
         else
@@ -134,6 +148,59 @@ defmodule Cemso.Solver do
     end
   end
 
+  defp show_success(attempt) do
+    %Attempt{word: word, score: score, from: from} = attempt
+
+    Logger.info(
+      [
+        "Found word for today: ",
+        IO.ANSI.bright(),
+        word,
+        IO.ANSI.normal(),
+        " with score of #{score}"
+      ],
+      ansi_color: :light_green
+    )
+
+    Logger.info(
+      [
+        "Path: ",
+        from |> :lists.reverse() |> Enum.map(&[&1, " -> "]),
+        IO.ANSI.bright(),
+        word,
+        IO.ANSI.normal()
+      ],
+      ansi_color: :light_green
+    )
+  end
+
+  defp reset_test_list(solver) do
+    n_rand = 10
+    Logger.info("Selecting #{n_rand} random words")
+
+    new_test_list =
+      case random_words(n_rand, solver.closed_list) do
+        [] ->
+          Logger.error("Exhausted all random words")
+          System.stop()
+          Process.sleep(:infinity)
+
+        list ->
+          list
+      end
+      |> from_random()
+
+    if [] != solver.closed_list do
+      Logger.warning("Resetting scores list")
+    end
+
+    %{solver | test_list: new_test_list}
+  end
+
+  defp reset_score_list(solver) do
+    %{solver | score_list: empty_score_list(solver.fast)}
+  end
+
   defp compare_score(%Attempt{score: a}, %Attempt{score: b}) do
     a > b
   end
@@ -142,10 +209,20 @@ defmodule Cemso.Solver do
     WordsTable.select_random(n_rand, known_words)
   end
 
-  defp similar_words(%Attempt{word: parent_word} = parent, n_similar, known_words) do
-    parent_word
-    |> WordsTable.select_similar(n_similar * 2, known_words)
-    |> from_parent(parent)
+  # defp words_at_range(parent, n_similar, known_words) do
+  #   selected = WordsTable.select_at_range(parent.word, parent.score, n_similar, known_words)
+  #   from_parent(selected, parent)
+  # end
+
+  defp words_at_range_multi(scored_words, n_at_range, known_words) do
+    selected = WordsTable.select_at_range_multi(scored_words, n_at_range, known_words)
+
+    from_range(selected)
+  end
+
+  defp similar_words(parent, n_similar, known_words) do
+    selected = WordsTable.select_similar(parent.word, n_similar, known_words)
+    from_parent(selected, parent)
   end
 
   defp get_score(solver, %Attempt{word: word} = _test_attempt) do
@@ -169,8 +246,18 @@ defmodule Cemso.Solver do
       str_score = score |> to_string() |> String.slice(0..4) |> String.pad_trailing(5, "0")
       expanded = if(e?, do: "!", else: " ")
       word = String.slice(word, 0..20) |> String.pad_trailing(20)
-      parents = Enum.intersperse(parent_words, " <- ")
-      [score_emoji(score), "  ", str_score, " ", expanded, " ", word, " <- ", parents, "\n"]
+      sep = " <- "
+
+      parents =
+        case parent_words do
+          [a, b, c, d, e, _ | _] ->
+            [a, sep, b, sep, c, sep, d, sep, e, sep, "..."]
+
+          _ ->
+            Enum.intersperse(parent_words, sep)
+        end
+
+      [score_emoji(score), "  ", str_score, " ", expanded, " ", word, sep, parents, "\n"]
     end)
   end
 
@@ -194,6 +281,13 @@ defmodule Cemso.Solver do
     Enum.map(
       words,
       &%Attempt{word: &1, expanded?: false, from: [parent_word | parent_from], score: nil}
+    )
+  end
+
+  defp from_range(words) do
+    Enum.map(
+      words,
+      &%Attempt{word: &1, expanded?: false, from: ["%"], score: nil}
     )
   end
 end

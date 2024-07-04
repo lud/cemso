@@ -1,6 +1,5 @@
 defmodule Cemso.DownloaderTest do
   alias Cemso.Downloader
-  alias WttjEtl.Utils.TransformCollectable
   use ExUnit.Case, async: true
 
   test "download file prototype" do
