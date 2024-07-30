@@ -4,6 +4,10 @@ defmodule Cemso.WordsTable do
   use GenServer
   require Logger
 
+  IO.warn(
+    "supervision is cumbersome, we should rather have an init script with start_link, and exit from any process on error"
+  )
+
   @tab __MODULE__
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
 
@@ -58,6 +62,13 @@ defmodule Cemso.WordsTable do
         fn {word, dims} ->
           similarity = similarity(dimensions, dims)
           proximity = abs(similarity - best_similarity)
+
+          if word == "charmant" do
+            best_similarity |> dbg()
+            similarity |> dbg()
+            proximity |> dbg()
+          end
+
           {proximity, word}
         end,
         fn {a, _}, {b, _} -> a < b end,
@@ -159,7 +170,11 @@ defmodule Cemso.WordsTable do
   end
 
   def similarity(dimensions_a, dimensions_b) do
-    cosine_similarity(dimensions_a, dimensions_b)
+    # best = cosine_similarity(dimensions_a, dimensions_b)
+    slow = alt_cosine_similarity(dimensions_a, dimensions_b)
+
+    # if best != slow, do:  ({best, slow} |> dbg())
+    # best
   end
 
   def cosine_similarity(dimensions_a, dimensions_b) do
@@ -173,6 +188,20 @@ defmodule Cemso.WordsTable do
   def normalize(a) do
     norm = Enum.reduce(a, 0, fn ai, sum -> sum + ai * ai end) |> :math.sqrt()
     Enum.map(a, fn ai -> ai / norm end)
+  end
+
+  defp alt_cosine_similarity(a, b) do
+    alt_dot(a, b) / (euclidean_norm(a) * euclidean_norm(b))
+  end
+
+  defp alt_dot(a, b, acc \\ 0)
+
+  defp alt_dot([ha | ta], [hb | tb], acc), do: alt_dot(ta, tb, acc + ha * hb)
+  defp alt_dot([], [], acc), do: acc
+
+  defp euclidean_norm(values) do
+    # ||A|| = √(A₁² + A₂² + … + Aₙ²)
+    values |> Enum.reduce(0, fn v, sum -> sum + :math.pow(v, 2) end) |> :math.sqrt()
   end
 
   @impl true
@@ -215,7 +244,11 @@ defmodule Cemso.WordsTable do
   end
 
   defp do_load(source, tab, ignored_words) do
-    Cemso.SourceData.download_source(source)
+    case Cemso.SourceData.download_source(source) do
+      :ok -> :ok
+      {:error, reason} -> exit(reason)
+    end
+
     input_path = Cemso.SourceData.download_path(source)
 
     ignored_count =

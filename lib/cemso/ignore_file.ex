@@ -10,7 +10,7 @@ defmodule Cemso.IgnoreFile do
   end
 
   def add(server, word) when is_binary(word) do
-    GenServer.call(server, {:add, word})
+    GenServer.cast(server, {:add, word})
   end
 
   def to_list(server) do
@@ -38,9 +38,8 @@ defmodule Cemso.IgnoreFile do
   end
 
   @impl true
-  def handle_call({:add, word}, from, state) do
-    GenServer.reply(from, :ok)
-    state = %{state | words: insert(state.words, word), tainted: true}
+  def handle_cast({:add, word}, state) do
+    state = %{state | words: [word | state.words], tainted: true}
     {:noreply, state, state.write_after}
   end
 
@@ -60,20 +59,16 @@ defmodule Cemso.IgnoreFile do
 
   @impl true
   def terminate(_reason, state) do
+    Logger.debug("Ignore file terminating with write")
     write_file(state)
   end
 
   defp write_file(state) do
     state.words
-    |> Enum.map(&(&1 <> "\n"))
+    |> Stream.intersperse("\n")
     |> Enum.into(File.stream!(state.path))
     |> then(fn _ -> Logger.debug("wrote ignore file") end)
 
     :ok
   end
-
-  defp insert([h | t], word) when word < h, do: [word, h | t]
-  defp insert([h | t], word) when word > h, do: [h | insert(t, word)]
-  defp insert([], word), do: [word]
-  defp insert([word | t], word), do: t
 end

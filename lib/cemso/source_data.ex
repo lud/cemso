@@ -17,6 +17,10 @@ defmodule Cemso.SourceData do
       url:
         "https://embeddings.net/embeddings/frWac_non_lem_no_postag_no_phrase_200_cbow_cut100.bin",
       md5: "5b5ffb3320999ae5536ac4a0f101faf3"
+    },
+    frWac_no_postag_no_phrase_500_cbow_cut100: %{
+      url: "https://embeddings.net/embeddings/frWac_no_postag_no_phrase_500_cbow_cut100.bin",
+      md5: "1c852a388a9bd610f84de6bdee87d8a9"
     }
   }
 
@@ -37,8 +41,8 @@ defmodule Cemso.SourceData do
     with :error <- check_existing(dest_path, md5),
          :ok <- Downloader.download_file(url, temp_path),
          :ok <- check_sum(temp_path, md5),
-         :ok <- File.rename(temp_path, dest_path) do
-      Logger.info("File download complete")
+         :ok <- rename_file(temp_path, dest_path) do
+      Logger.info("File download complete", ansi_color: :green)
       :ok = check_sum(dest_path, md5)
     else
       {:ok, :already_in_cache} -> :ok
@@ -79,5 +83,10 @@ defmodule Cemso.SourceData do
 
       {:error, :checksum_error}
     end
+  end
+
+  defp rename_file(from, to) do
+    Logger.debug("Renaming file #{from} to #{to}")
+    File.rename(from, to)
   end
 end

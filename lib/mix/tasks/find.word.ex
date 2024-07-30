@@ -72,6 +72,8 @@ defmodule Mix.Tasks.Find.Word do
     receive do
       {:DOWN, ^ref, :process, ^solver, _} -> :ok
     end
+
+    System.stop()
   end
 
   defp parse_test_list(words) when is_binary(words) do

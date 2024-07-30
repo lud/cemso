@@ -20,11 +20,13 @@ defmodule Cemso.IgnoreFileTest do
     assert "" == File.read!(path)
     # file is written on terminate
     assert :ok = GenServer.stop(pid)
-    assert "some_word\n" == File.read!(path)
+    assert "some_word" == File.read!(path)
   end
 
-  test "loads from file on start an stores as sortez" do
+  test "loads from file on start and stores as sorted" do
     path = make_path()
+
+    File.write!(path, "ooo\nppp")
 
     assert {:ok, pid1} = IgnoreFile.start_link(path: path)
     assert :ok = IgnoreFile.add(pid1, "zzz")
@@ -36,7 +38,9 @@ defmodule Cemso.IgnoreFileTest do
 
     assert """
            aaa
-           zzz
+           ooo
+           ppp
+           zzz\
            """ == File.read!(path)
   end
 

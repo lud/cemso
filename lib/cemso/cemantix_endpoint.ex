@@ -6,7 +6,8 @@ defmodule Cemso.CemantixEndpoint do
     :ok = Kota.await(Cemantix.RateLimiter)
 
     Req.post("https://cemantix.certitudes.org/score",
-      retry: false,
+      retry: :safe_transient,
+      retry_delay: fn _ -> 1000 end,
       body: "word=#{word}",
       headers: %{
         "Content-Type" => "application/x-www-form-urlencoded",
@@ -31,7 +32,8 @@ defmodule Cemso.CemantixEndpoint do
       {:error, reason} ->
         {:error, "unknown error: #{inspect(reason)}"}
 
-      {:ok, _} ->
+      {:ok, resp} ->
+        Logger.error("Cemantix returned response: #{inspect(resp.body)}")
         {:error, "bad server response"}
     end
   end

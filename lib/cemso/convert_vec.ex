@@ -2,7 +2,15 @@ defmodule Cemso.ConvertVec do
   alias Cemso.Utils.Buffer
 
   def bin2txt(input_path, state, handler) do
-    {:ok, buf} = Buffer.open(input_path)
+    buf =
+      case Buffer.open(input_path) do
+        {:ok, buf} ->
+          buf
+
+        other ->
+          exit("Error when opening downloaded file #{input_path}: #{inspect(other)}")
+      end
+
     do_bin2txt(buf, state, handler)
   end
 

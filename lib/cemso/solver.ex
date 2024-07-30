@@ -7,6 +7,10 @@ defmodule Cemso.Solver do
 
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
 
+  # How much similar words to lookup with the slow algorithm
+  @slow_n_similar 10
+  @n_rand 10
+
   def start_link(opts) do
     Logger.info("Solver initialized")
     {gen_opts, opts} = Keyword.split(opts, @gen_opts)
@@ -35,7 +39,14 @@ defmodule Cemso.Solver do
 
   defp solve(state) do
     solver = %{
+      # test list only for fast
       test_list: state.init_list,
+      # init list only for slow
+      init_list:
+        case state.init_list do
+          [] -> :used
+          list -> list
+        end,
       fast: state.fast,
       score_list: empty_score_list(state.fast),
       closed_list: [],
@@ -55,35 +66,119 @@ defmodule Cemso.Solver do
   end
 
   defmodule Attempt do
-    defstruct word: nil, score: nil, expanded?: false, from: []
+    defstruct word: nil, score: nil, expanded: 0, from: [], recent: true
   end
 
-  defp loop(%{fast: false, test_list: []} = solver) do
-    # Take first word not expanded yet and select similar words
+  # defp loop(%{fast: false, test_list: []} = solver) do
+  #   # Take first word not expanded yet and select similar words
 
+  #   print_scores(solver)
+
+  #   solver.score_list
+  #   |> Stream.filter(fn %Attempt{expanded: is?} -> not is? end)
+  #   |> Enum.take(1)
+  #   |> case do
+  #     [] ->
+  #       solver
+  #       |> with_new_random_test_list()
+  #       |> with_empty_score_list()
+  #       |> loop()
+
+  #     [%Attempt{word: word, expanded: false} = top] ->
+
+  #       Logger.info("Selecting #{n_similar} similar words to #{inspect(word)}")
+  #       new_test_list = similar_words(top, @slow_n_similar, solver.closed_list)
+
+  #       new_score_list =
+  #         solver.score_list
+  #         |> TopList.drop(top)
+  #         |> TopList.put(%Attempt{top | expanded: true})
+
+  #       loop(%{solver | test_list: new_test_list, score_list: new_score_list})
+  #   end
+  # end
+
+  defp loop(%{fast: false} = solver) do
     print_scores(solver)
 
-    TopList.to_list(solver.score_list)
-    |> Stream.filter(fn %Attempt{expanded?: is?} -> not is? end)
-    |> Enum.take(1)
-    |> case do
-      [] ->
-        solver
-        |> reset_test_list()
-        |> reset_score_list()
-        |> loop()
+    solver = unflag_recent_attempts(solver)
 
-      [%Attempt{word: word, expanded?: false} = top] ->
-        n_similar = 10
-        Logger.info("Selecting #{n_similar} similar words to #{inspect(word)}")
-        new_test_list = similar_words(top, n_similar, solver.closed_list)
+    {expanded_from, test_list, solver} =
+      solver.score_list
+      |> Stream.filter(fn %Attempt{expanded: exp} -> exp < @slow_n_similar end)
+      |> Enum.take(1)
+      |> case do
+        [] when is_list(solver.init_list) ->
+          {:init, solver.init_list, %{solver | init_list: :used}}
 
-        new_score_list =
+        [] ->
+          {:random, select_random_words(solver.closed_list), solver}
+
+        [%Attempt{word: word, expanded: exp} = top] when exp < @slow_n_similar ->
+          # Always reselect a full batch of similar words, so we do not use:
+          #
+          #     n_similar = @slow_n_similar - top.expanded
+          #
+          # This avoids walking the full words table just to select 1 word that
+          # will be unknown, multiple times. We can overshoot the :expanded number
+          n_similar = @slow_n_similar
+          Logger.info("Selecting #{n_similar} similar words to #{inspect(word)}")
+
+          smilars =
+            case similar_words(top, n_similar, solver.closed_list) do
+              [] -> exit(:no_more_words)
+              list -> list
+            end
+
+          {top, smilars, solver}
+      end
+
+    init_acc = {_valid_count = 0, _valids = [], solver.closed_list}
+
+    {valid_count, new_attempts, closed_list} =
+      Enum.reduce(test_list, init_acc, fn
+        attempt, {valid_count, valids, closed_list} ->
+          closed_list = [attempt.word | closed_list]
+
+          case get_score(solver, attempt) do
+            {:ok, score} ->
+              attempt = %Attempt{attempt | score: score}
+
+              {valid_count + 1, [attempt | valids], closed_list}
+
+            # If the word is unknown we only remove from the test list
+            {:error, :cemantix_unknown} ->
+              Logger.warning("Unknow word #{attempt.word}")
+              :ok = IgnoreFile.add(solver.ignore_file, attempt.word)
+              {valid_count, valids, closed_list}
+
+            {:error, message} ->
+              Logger.error(message)
+              {valid_count, valids, closed_list}
+          end
+      end)
+
+    score_list =
+      case expanded_from do
+        :random ->
+          empty_score_list(false = solver.fast)
+
+        :init ->
           solver.score_list
-          |> TopList.drop(top)
-          |> TopList.put(%Attempt{top | expanded?: true})
 
-        loop(%{solver | test_list: new_test_list, score_list: new_score_list})
+        parent_attempt ->
+          solver.score_list
+          |> TopList.drop(parent_attempt)
+          |> TopList.put(Map.update!(parent_attempt, :expanded, &(&1 + valid_count)))
+      end
+
+    score_list = Enum.reduce(new_attempts, score_list, &TopList.put(&2, &1))
+
+    solver = %{solver | score_list: score_list, closed_list: closed_list}
+
+    case check_success(solver) do
+      :continue -> loop(solver)
+      :success -> :ok
     end
   end
 
@@ -92,13 +187,15 @@ defmodule Cemso.Solver do
 
     print_scores(solver)
 
+    solver = unflag_recent_attempts(solver)
+
     solver.score_list
     |> TopList.to_list(&{&1.word, &1.score})
     |> case do
       [] ->
         solver
-        |> reset_test_list()
-        |> reset_score_list()
+        |> with_new_random_test_list()
+        |> with_empty_score_list()
         |> loop()
 
       all_known_scored_words ->
@@ -148,6 +245,18 @@ defmodule Cemso.Solver do
     end
   end
 
+  defp check_success(solver) do
+    case Enum.at(solver.score_list, 0) do
+      %{score: score} = attempt when score > 0.9999 ->
+        print_scores(solver)
+        show_success(attempt)
+        :success
+
+      _ ->
+        :continue
+    end
+  end
+
   defp show_success(attempt) do
     %Attempt{word: word, score: score, from: from} = attempt
 
@@ -174,21 +283,8 @@ defmodule Cemso.Solver do
     )
   end
 
-  defp reset_test_list(solver) do
-    n_rand = 10
-    Logger.info("Selecting #{n_rand} random words")
-
-    new_test_list =
-      case random_words(n_rand, solver.closed_list) do
-        [] ->
-          Logger.error("Exhausted all random words")
-          System.stop()
-          Process.sleep(:infinity)
-
-        list ->
-          list
-      end
-      |> from_random()
+  defp with_new_random_test_list(solver) do
+    new_test_list = select_random_words(solver.closed_list)
 
     if [] != solver.closed_list do
       Logger.warning("Resetting scores list")
@@ -197,12 +293,27 @@ defmodule Cemso.Solver do
     %{solver | test_list: new_test_list}
   end
 
-  defp reset_score_list(solver) do
+  defp with_empty_score_list(solver) do
     %{solver | score_list: empty_score_list(solver.fast)}
   end
 
   defp compare_score(%Attempt{score: a}, %Attempt{score: b}) do
     a > b
+  end
+
+  defp select_random_words(closed_list) do
+    Logger.info("Selecting #{@n_rand} random words")
+
+    case random_words(@n_rand, closed_list) do
+      [] ->
+        Logger.error("Exhausted all random words")
+        System.stop()
+        Process.sleep(:infinity)
+
+      list ->
+        list
+    end
+    |> from_random()
   end
 
   defp random_words(n_rand, known_words) do
@@ -232,29 +343,37 @@ defmodule Cemso.Solver do
   end
 
   defp print_scores(solver) do
-    Logger.flush()
     Logger.info(["Scores:\n", format_scores(solver)])
   end
 
   defp format_scores(solver) do
-    TopList.to_list(solver.score_list, fn %Attempt{
-                                            word: word,
-                                            score: score,
-                                            expanded?: e?,
-                                            from: parent_words
-                                          } ->
+    TopList.to_list(solver.score_list, fn attempt ->
+      %Attempt{
+        word: word,
+        score: score,
+        expanded: exp,
+        from: parent_words,
+        recent: recent?
+      } = attempt
+
       str_score = score |> to_string() |> String.slice(0..4) |> String.pad_trailing(5, "0")
-      expanded = if(e?, do: "!", else: " ")
+      expanded = if(exp >= @slow_n_similar, do: "!", else: " ")
       word = String.slice(word, 0..20) |> String.pad_trailing(20)
+
+      word =
+        if recent?,
+          do: [IO.ANSI.bright(), word, IO.ANSI.normal()],
+          else: word
+
       sep = " <- "
 
-      parents =
-        case parent_words do
-          [a, b, c, d, e, _ | _] ->
-            [a, sep, b, sep, c, sep, d, sep, e, sep, "..."]
+      max_trail = 4
 
-          _ ->
-            Enum.intersperse(parent_words, sep)
+      parents =
+        if length(parent_words) > max_trail do
+          [Enum.take(parent_words, max_trail) |> Enum.intersperse(sep), sep, "..."]
+        else
+          Enum.intersperse(parent_words, sep)
         end
 
       [score_emoji(score), "  ", str_score, " ", expanded, " ", word, sep, parents, "\n"]
@@ -270,24 +389,30 @@ defmodule Cemso.Solver do
   defp score_emoji(_), do: "🧊"
 
   defp from_opts(words) do
-    Enum.map(words, &%Attempt{word: &1, expanded?: false, from: ["--init"], score: nil})
+    Enum.map(words, &%Attempt{word: &1, expanded: 0, from: ["--init"], score: nil})
   end
 
   defp from_random(words) do
-    Enum.map(words, &%Attempt{word: &1, expanded?: false, from: ["*"], score: nil})
+    Enum.map(words, &%Attempt{word: &1, expanded: 0, from: ["*"], score: nil})
   end
 
   defp from_parent(words, %Attempt{word: parent_word, from: parent_from}) do
     Enum.map(
       words,
-      &%Attempt{word: &1, expanded?: false, from: [parent_word | parent_from], score: nil}
+      &%Attempt{word: &1, expanded: 0, from: [parent_word | parent_from], score: nil}
     )
   end
 
   defp from_range(words) do
     Enum.map(
       words,
-      &%Attempt{word: &1, expanded?: false, from: ["%"], score: nil}
+      &%Attempt{word: &1, expanded: 0, from: ["%"], score: nil}
     )
+  end
+
+  defp unflag_recent_attempts(solver) do
+    Map.update!(solver, :score_list, fn list ->
+      TopList.map(list, &%Attempt{&1 | recent: false})
+    end)
   end
 end

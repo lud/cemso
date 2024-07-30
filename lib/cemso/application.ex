@@ -19,7 +19,7 @@ defmodule Cemso.Application do
       {Kota,
        name: Cemantix.RateLimiter,
        max_allow: 1,
-       range_ms: 200,
+       range_ms: 50,
        adapter: Kota.Bucket.DiscreteCounter},
       {Cemso.IgnoreFile, name: via(:ignore_file), path: ignore_file, write_after: 250},
       {Cemso.WordsTable, source: source, name: via(:loader), ignore_file: via(:ignore_file)}
