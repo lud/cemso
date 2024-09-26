@@ -60,11 +60,16 @@ defmodule Cemso.IgnoreFile do
   @impl true
   def terminate(_reason, state) do
     Logger.debug("Ignore file terminating with write")
-    write_file(state)
+    write_file(state, true)
   end
 
-  defp write_file(state) do
-    state.words
+  defp write_file(state, clean? \\ false) do
+    words =
+      if clean?,
+        do: state.words |> Enum.uniq() |> Enum.sort(),
+        else: state.words
+
+    words
     |> Stream.intersperse("\n")
     |> Enum.into(File.stream!(state.path))
     |> then(fn _ -> Logger.debug("wrote ignore file") end)
