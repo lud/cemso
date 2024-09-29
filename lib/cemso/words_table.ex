@@ -20,6 +20,9 @@ defmodule Cemso.WordsTable do
     GenServer.call(server, {:subscribe, self()})
   end
 
+  IO.warn("@todo ignore map instead of list")
+  IO.warn("@todo command to find farthest word from word")
+
   def select_random(n, ignore_list) do
     # generate a random number for each word and select the N smallest ones
 
