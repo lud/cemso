@@ -173,11 +173,7 @@ defmodule Cemso.WordsTable do
   end
 
   def similarity(dimensions_a, dimensions_b) do
-    # best = cosine_similarity(dimensions_a, dimensions_b)
-    slow = alt_cosine_similarity(dimensions_a, dimensions_b)
-
-    # if best != slow, do:  ({best, slow} |> dbg())
-    # best
+    cosine_similarity(dimensions_a, dimensions_b)
   end
 
   def cosine_similarity(dimensions_a, dimensions_b) do

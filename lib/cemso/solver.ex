@@ -122,7 +122,13 @@ defmodule Cemso.Solver do
           # This avoids walking the full words table just to select 1 word that
           # will be unknown, multiple times. We can overshoot the :expanded number
           n_similar = @slow_n_similar
-          Logger.info("Selecting #{n_similar} similar words to #{inspect(word)}")
+
+          Logger.info([
+            "Selecting #{n_similar} similar words to ",
+            IO.ANSI.bright(),
+            word,
+            IO.ANSI.normal()
+          ])
 
           smilars =
             case similar_words(top, n_similar, solver.closed_list) do
