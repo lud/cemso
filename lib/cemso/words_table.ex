@@ -66,12 +66,6 @@ defmodule Cemso.WordsTable do
           similarity = similarity(dimensions, dims)
           proximity = abs(similarity - best_similarity)
 
-          if word == "charmant" do
-            best_similarity |> dbg()
-            similarity |> dbg()
-            proximity |> dbg()
-          end
-
           {proximity, word}
         end,
         fn {a, _}, {b, _} -> a < b end,
@@ -256,8 +250,8 @@ defmodule Cemso.WordsTable do
           Logger.info("Loading #{wordcount} words into memory")
           _ignored_count = 0
 
-        :dimensions, _dimensions, ignored_count ->
-          ignored_count
+        # :dimensions, _dimensions, ignored_count ->
+        #   ignored_count
 
         :word, {word, dimensions}, ignored_count ->
           case MapSet.member?(ignored_words, word) do

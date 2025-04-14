@@ -103,7 +103,9 @@ defmodule Cemso.Solver do
 
     solver = unflag_recent_attempts(solver)
 
-    {expanded_from, test_list, solver} =
+    n_similar = @slow_n_similar
+
+    {expanded_from, test_list_pool, solver} =
       solver.score_list
       |> Stream.filter(fn %Attempt{expanded: exp} -> exp < @slow_n_similar end)
       |> Enum.take(1)
@@ -121,7 +123,6 @@ defmodule Cemso.Solver do
           #
           # This avoids walking the full words table just to select 1 word that
           # will be unknown, multiple times. We can overshoot the :expanded number
-          n_similar = @slow_n_similar
 
           Logger.info([
             "Selecting #{n_similar} similar words to ",
@@ -130,38 +131,67 @@ defmodule Cemso.Solver do
             IO.ANSI.normal()
           ])
 
+          # Take 10 times the expected number of similar words, so we have room
+          # for score failures
           smilars =
-            case similar_words(top, n_similar, solver.closed_list) do
+            case similar_words(top, (n_similar * 10), solver.closed_list) do
               [] -> exit(:no_more_words)
               list -> list
             end
 
+
           {top, smilars, solver}
       end
 
-    init_acc = {_valid_count = 0, _valids = [], solver.closed_list}
+    stop_ref = make_ref()
 
     {valid_count, new_attempts, closed_list} =
-      Enum.reduce(test_list, init_acc, fn
-        attempt, {valid_count, valids, closed_list} ->
+      test_list_pool
+      # We want to get no more than `n_similar` scores but we want to let
+      # unscorable words continue downstream so we can add them to the closed
+      # list.
+      #
+      # We cannot just reduce over everything because we want to introduce a
+      # `Stream.take(stream, n_similar)` in between.
+      |> Stream.map(fn attempt ->
+        case get_score(solver, attempt) do
+          {:ok, score} ->
+            {:score, attempt, score}
+
+          {:error, :cemantix_unknown} ->
+            Logger.warning("Unknown word #{attempt.word}")
+            :ok = IgnoreFile.add(solver.ignore_file, attempt.word)
+            {:noscore, attempt}
+
+          {:error, message} ->
+            Logger.error(message)
+            {:noscore, attempt}
+        end
+      end)
+      # take `n_similar` successful attempts. They may be less than that but in
+      # this case the stream will end normally.
+      |> Stream.transform(0, fn
+        {:score, _, _} = item, scored_count when scored_count == n_similar - 1 ->
+          {[item, stop_ref], nil}
+
+        {:score, _, _} = item, scored_count ->
+          {[item], scored_count + 1}
+
+        {:noscore, _} = item, scored_count ->
+          {[item], scored_count}
+      end)
+      |> Stream.take_while(&(&1 != stop_ref))
+      # finally handle our attempts, computing what is right for good and bad
+      # attempts.
+      |> Enum.reduce({_valid_count = 0, _valids = [], solver.closed_list}, fn
+        {:noscore, attempt}, {valid_count, valids, closed_list} ->
           closed_list = [attempt.word | closed_list]
+          {valid_count, valids, closed_list}
 
-          case get_score(solver, attempt) do
-            {:ok, score} ->
-              attempt = %Attempt{attempt | score: score}
-
-              {valid_count + 1, [attempt | valids], closed_list}
-
-            # If the word is unknown we only remove from the test list
-            {:error, :cemantix_unknown} ->
-              Logger.warning("Unknown word #{attempt.word}")
-              :ok = IgnoreFile.add(solver.ignore_file, attempt.word)
-              {valid_count, valids, closed_list}
-
-            {:error, message} ->
-              Logger.error(message)
-              {valid_count, valids, closed_list}
-          end
+        {:score, attempt, score}, {valid_count, valids, closed_list} ->
+          closed_list = [attempt.word | closed_list]
+          attempt = %Attempt{attempt | score: score}
+          {valid_count + 1, [attempt | valids], closed_list}
       end)
 
     score_list =

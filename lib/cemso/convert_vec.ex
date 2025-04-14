@@ -28,7 +28,7 @@ defmodule Cemso.ConvertVec do
       end)
 
     state = handler.(:wordcount, n_words, state)
-    state = handler.(:dimensions, n_dimensions, state)
+    # state = handler.(:dimensions, n_dimensions, state)
 
     {state, buf} =
       Enum.reduce(1..n_words, {state, buf}, fn _, {state, buf} ->
