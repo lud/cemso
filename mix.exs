@@ -23,7 +23,8 @@ defmodule Cemso.MixProject do
       # App
       {:req, "~> 0.5.0"},
       {:kota, "~> 0.1.0"},
-      {:cli_mate, "~> 0.5"},
+      {:cli_mate, "~> 0.7"},
+      {:tz, "~> 0.28.1"},
 
       # Test
       {:bypass, "~> 2.1", only: :test},

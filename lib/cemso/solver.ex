@@ -154,7 +154,7 @@ defmodule Cemso.Solver do
 
             # If the word is unknown we only remove from the test list
             {:error, :cemantix_unknown} ->
-              Logger.warning("Unknow word #{attempt.word}")
+              Logger.warning("Unknown word #{attempt.word}")
               :ok = IgnoreFile.add(solver.ignore_file, attempt.word)
               {valid_count, valids, closed_list}
 
@@ -241,7 +241,7 @@ defmodule Cemso.Solver do
 
       # If the word is unknown we only remove from the test list
       {:error, :cemantix_unknown} ->
-        Logger.warning("Unknow word #{head_word}")
+        Logger.warning("Unknown word #{head_word}")
         :ok = IgnoreFile.add(solver.ignore_file, head_word)
         loop(%{solver | test_list: t})
 

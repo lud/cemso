@@ -9,3 +9,5 @@ config :cemso,
   ignore_file: Path.join([File.cwd!(), "priv", "ignored"])
 
 config :logger, :console, format: "$metadata[$level] $message\n"
+
+config :elixir, :time_zone_database, Tz.TimeZoneDatabase

@@ -2,11 +2,18 @@ defmodule Cemso.CemantixEndpoint do
   require Logger
 
   def get_score(word) do
+    # Count in days since well-known arbitrary date
+    daycount =
+      DateTime.now!("Europe/Paris")
+      |> DateTime.to_date()
+      |> Date.diff(~D[2022-03-02])
+
     Logger.info("Requesting score for #{inspect(word)}")
     :ok = Kota.await(Cemantix.RateLimiter)
 
     Req.post("https://cemantix.certitudes.org/score",
       retry: :safe_transient,
+      params: [n: daycount],
       retry_delay: fn _ -> 1000 end,
       body: "word=#{word}",
       headers: %{
@@ -17,13 +24,13 @@ defmodule Cemso.CemantixEndpoint do
       }
     )
     |> case do
-      {:ok, %Req.Response{status: 200, body: %{"error" => "Je ne connais pas" <> _}}} ->
+      {:ok, %Req.Response{status: 200, body: %{"e" => "Je ne connais pas" <> _}}} ->
         {:error, :cemantix_unknown}
 
       {:ok, %Req.Response{status: 200, body: "Je ne connais pas" <> _}} ->
         {:error, :cemantix_unknown}
 
-      {:ok, %Req.Response{status: 200, body: %{"score" => score}}} when is_number(score) ->
+      {:ok, %Req.Response{status: 200, body: %{"s" => score}}} when is_number(score) ->
         {:ok, score}
 
       {:error, reason} when is_exception(reason) ->
