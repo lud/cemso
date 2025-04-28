@@ -134,11 +134,10 @@ defmodule Cemso.Solver do
           # Take 10 times the expected number of similar words, so we have room
           # for score failures
           smilars =
-            case similar_words(top, (n_similar * 10), solver.closed_list) do
+            case similar_words(top, n_similar * 10, solver.closed_list) do
               [] -> exit(:no_more_words)
               list -> list
             end
-
 
           {top, smilars, solver}
       end
