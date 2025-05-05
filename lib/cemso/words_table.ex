@@ -4,10 +4,6 @@ defmodule Cemso.WordsTable do
   use GenServer
   require Logger
 
-  IO.warn(
-    "supervision is cumbersome, we should rather have an init script with start_link, and exit from any process on error"
-  )
-
   @tab __MODULE__
   @gen_opts ~w(name timeout debug spawn_opt hibernate_after)a
 
@@ -43,7 +39,7 @@ defmodule Cemso.WordsTable do
     [{^word, dimensions}] = :ets.lookup(@tab, word)
 
     tl =
-      parallel_map(
+      select_toplist(
         fn {word, dims} ->
           similarity = similarity(dimensions, dims)
           {similarity, word}
@@ -61,7 +57,7 @@ defmodule Cemso.WordsTable do
     [{^word, dimensions}] = :ets.lookup(@tab, word)
 
     tl =
-      parallel_map(
+      select_toplist(
         fn {word, dims} ->
           similarity = similarity(dimensions, dims)
           proximity = abs(similarity - best_similarity)
@@ -87,7 +83,7 @@ defmodule Cemso.WordsTable do
     target_count = length(words_scores)
 
     tl =
-      parallel_map(
+      select_toplist(
         fn {word, dims} ->
           range_proximity_sum =
             Enum.reduce(targets, 0, fn {_t_word, t_dimensions, t_score}, sum ->
@@ -108,45 +104,18 @@ defmodule Cemso.WordsTable do
     TopList.to_list(tl, fn {_, word} -> word end)
   end
 
-  defp parallel_map(mapper, comparator, n, ignore_list) do
+  defp select_toplist(mapper, comparator, n, ignore_list) do
     # Start with the first key in the table.
-    :ets.first(@tab)
+    reducer = fn {word, dimensions}, tl ->
+      if word in ignore_list do
+        tl
+      else
+        mapped = mapper.({word, dimensions})
+        TopList.put(tl, mapped)
+      end
+    end
 
-    # For each key in the table we will return the tuple of word+dimensions,
-    # and the next key. Stop when the key is $end_of_table.
-    |> Stream.unfold(fn
-      :"$end_of_table" ->
-        nil
-
-      prev ->
-        [{^prev, _} = elem] = :ets.lookup(@tab, prev)
-        {elem, :ets.next(@tab, prev)}
-    end)
-
-    # Ignore the words from the ignore list. We do not do that in the async
-    # stream to avoid copying the list on each async task.
-    |> Stream.filter(fn {word, _} -> word not in ignore_list end)
-
-    # Split the stream in chunks of N words to send to an async task.
-    |> Stream.chunk_every(100)
-
-    # For each chunk, start an async task and apply the mapper to the
-    # word+dimensions tuple.
-    |> Task.async_stream(
-      fn words ->
-        Enum.map(words, mapper)
-      end,
-      timeout: :infinity,
-      ordered: false
-    )
-
-    # Unwrap the task
-    |> Stream.flat_map(fn {:ok, list} -> list end)
-
-    # Reduce to the top list and return it
-    |> Enum.reduce(TopList.new(n, comparator), fn mapped_result, tl ->
-      TopList.put(tl, mapped_result)
-    end)
+    :ets.foldl(reducer, TopList.new(n, comparator), @tab)
   end
 
   def get_word(word) do
@@ -167,11 +136,8 @@ defmodule Cemso.WordsTable do
   end
 
   def similarity(dimensions_a, dimensions_b) do
-    cosine_similarity(dimensions_a, dimensions_b)
-  end
-
-  def cosine_similarity(dimensions_a, dimensions_b) do
-    dot(normalize(dimensions_a), normalize(dimensions_b))
+    # vectors are already normalized on insertion in the table
+    dot(dimensions_a, dimensions_b)
   end
 
   def dot(a, b) do
@@ -181,20 +147,6 @@ defmodule Cemso.WordsTable do
   def normalize(a) do
     norm = Enum.reduce(a, 0, fn ai, sum -> sum + ai * ai end) |> :math.sqrt()
     Enum.map(a, fn ai -> ai / norm end)
-  end
-
-  defp alt_cosine_similarity(a, b) do
-    alt_dot(a, b) / (euclidean_norm(a) * euclidean_norm(b))
-  end
-
-  defp alt_dot(a, b, acc \\ 0)
-
-  defp alt_dot([ha | ta], [hb | tb], acc), do: alt_dot(ta, tb, acc + ha * hb)
-  defp alt_dot([], [], acc), do: acc
-
-  defp euclidean_norm(values) do
-    # ||A|| = √(A₁² + A₂² + … + Aₙ²)
-    values |> Enum.reduce(0, fn v, sum -> sum + :math.pow(v, 2) end) |> :math.sqrt()
   end
 
   @impl true
@@ -256,7 +208,7 @@ defmodule Cemso.WordsTable do
         :word, {word, dimensions}, ignored_count ->
           case MapSet.member?(ignored_words, word) do
             false ->
-              true = :ets.insert(tab, {word, dimensions})
+              true = :ets.insert(tab, {word, normalize(dimensions)})
               ignored_count
 
             true ->

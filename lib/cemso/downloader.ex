@@ -22,9 +22,4 @@ defmodule Cemso.Downloader do
         err
     end
   end
-
-  defp log_download(binary) do
-    Logger.debug("Downloaded #{byte_size(binary)}b")
-    binary
-  end
 end

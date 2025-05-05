@@ -44,16 +44,25 @@ defmodule Cemso.IgnoreFileTest do
            """ == File.read!(path)
   end
 
-  test "can return the ignored words without duplicates" do
-    assert {:ok, pid} = IgnoreFile.start_link(path: make_path())
+  test "can write the ignored words without duplicates" do
+    path = make_path()
+    assert {:ok, pid} = IgnoreFile.start_link(path: path)
+    assert :ok = IgnoreFile.add(pid, "a")
+    assert :ok = IgnoreFile.add(pid, "b")
     assert :ok = IgnoreFile.add(pid, "c")
-    assert :ok = IgnoreFile.add(pid, "b")
-    assert :ok = IgnoreFile.add(pid, "b")
-    assert :ok = IgnoreFile.add(pid, "b")
     assert :ok = IgnoreFile.add(pid, "a")
-    assert :ok = IgnoreFile.add(pid, "a")
+    assert :ok = IgnoreFile.add(pid, "b")
+    assert :ok = IgnoreFile.add(pid, "c")
     assert :ok = IgnoreFile.add(pid, "a")
 
+    # in its state, the server does not keep the list as cleaned. It's just
+    # cons'ed.
+    assert ["a", "c", "b", "a", "c", "b", "a"] = IgnoreFile.to_list(pid)
+
+    # but when it's written on disk, it is clean
+    assert :ok = IgnoreFile.force_write(pid)
+
+    # After a write, the state keeps a clean version of the list
     assert ["a", "b", "c"] = IgnoreFile.to_list(pid)
 
     :ok = GenServer.stop(pid)

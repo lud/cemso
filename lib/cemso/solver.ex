@@ -142,6 +142,7 @@ defmodule Cemso.Solver do
           {top, smilars, solver}
       end
 
+    # define a ref to mark the end of stream once we have enough scored items
     stop_ref = make_ref()
 
     {valid_count, new_attempts, closed_list} =
@@ -158,7 +159,7 @@ defmodule Cemso.Solver do
             {:score, attempt, score}
 
           {:error, :cemantix_unknown} ->
-            Logger.warning("Unknown word #{attempt.word}")
+            Logger.warning("Unknown word #{inspect(attempt.word)}")
             :ok = IgnoreFile.add(solver.ignore_file, attempt.word)
             {:noscore, attempt}
 
@@ -171,6 +172,8 @@ defmodule Cemso.Solver do
       # this case the stream will end normally.
       |> Stream.transform(0, fn
         {:score, _, _} = item, scored_count when scored_count == n_similar - 1 ->
+          # we will have enough scored items, so we send the stop ref in the
+          # stream
           {[item, stop_ref], nil}
 
         {:score, _, _} = item, scored_count ->
@@ -179,6 +182,7 @@ defmodule Cemso.Solver do
         {:noscore, _} = item, scored_count ->
           {[item], scored_count}
       end)
+      # take everything until the stop ref if present.
       |> Stream.take_while(&(&1 != stop_ref))
       # finally handle our attempts, computing what is right for good and bad
       # attempts.

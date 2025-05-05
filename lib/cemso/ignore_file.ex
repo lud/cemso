@@ -17,6 +17,10 @@ defmodule Cemso.IgnoreFile do
     GenServer.call(server, :to_list)
   end
 
+  def force_write(server) do
+    GenServer.call(server, :force_write)
+  end
+
   @impl true
   def init(opts) do
     Process.flag(:trap_exit, true)
@@ -49,12 +53,22 @@ defmodule Cemso.IgnoreFile do
   end
 
   @impl true
-  def handle_info(:timeout, state) do
-    if state.tainted do
-      :ok = write_file(state)
-    end
+  def handle_call(:force_write, _from, state) do
+    {:ok, state} = write_file(state)
+    {:reply, :ok, %{state | tainted: false}, state.write_after}
+  end
 
-    {:noreply, %{state | tainted: false}, :infinity}
+  @impl true
+  def handle_info(:timeout, state) do
+    state =
+      if state.tainted do
+        {:ok, state} = write_file(state)
+        state
+      else
+        state
+      end
+
+    {:noreply, state, :infinity}
   end
 
   @impl true
@@ -64,13 +78,17 @@ defmodule Cemso.IgnoreFile do
   end
 
   defp write_file(state) do
-    state.words
-    |> Enum.uniq()
-    |> Enum.sort()
-    |> Stream.intersperse("\n")
-    |> Enum.into(File.stream!(state.path))
-    |> then(fn _ -> Logger.debug("wrote ignore file") end)
+    words =
+      state.words
+      |> Enum.uniq()
+      |> Enum.sort()
 
-    :ok
+    :ok =
+      words
+      |> Stream.intersperse("\n")
+      |> Enum.into(File.stream!(state.path))
+      |> then(fn _ -> Logger.debug("wrote ignore file") end)
+
+    {:ok, %{state | tainted: false, words: words}}
   end
 end
