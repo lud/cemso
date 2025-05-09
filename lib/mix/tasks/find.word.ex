@@ -44,7 +44,7 @@ defmodule Mix.Tasks.Find.Word do
     %{options: options} = CliMate.CLI.parse_or_halt!(argv, @command)
 
     solver_opts = [
-      loader: Cemso.Application.via(:loader),
+      words_table: Cemso.Application.via(:words_table),
       ignore_file: Cemso.Application.via(:ignore_file),
       init_list: parse_test_list(options[:init]),
       fast: options.fast
@@ -56,7 +56,7 @@ defmodule Mix.Tasks.Find.Word do
           {:ok, simulator} =
             Supervisor.start_child(
               Cemso.Supervisor,
-              {SimEndpoint, word: word, loader: Cemso.Application.via(:loader)}
+              {SimEndpoint, word: word, words_table: Cemso.Application.via(:words_table)}
             )
 
           [{:score_adapter, {SimEndpoint, [simulator]}} | solver_opts]

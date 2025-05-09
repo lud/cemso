@@ -16,9 +16,6 @@ defmodule Cemso.WordsTable do
     GenServer.call(server, {:subscribe, self()})
   end
 
-  IO.warn("@todo ignore map instead of list")
-  IO.warn("@todo command to find farthest word from word")
-
   def select_random(n, ignore_list) do
     # generate a random number for each word and select the N smallest ones
 
@@ -49,7 +46,24 @@ defmodule Cemso.WordsTable do
         ignore_list
       )
 
-    TopList.to_list(tl, fn {_, word} -> word end)
+    tl
+  end
+
+  def select_dissimilar(word, n, ignore_list) do
+    [{^word, dimensions}] = :ets.lookup(@tab, word)
+
+    tl =
+      select_toplist(
+        fn {word, dims} ->
+          similarity = similarity(dimensions, dims)
+          {similarity, word}
+        end,
+        fn {a, _}, {b, _} -> a < b end,
+        n,
+        ignore_list
+      )
+
+    tl
   end
 
   # Select words who have a similarity close to best_similarity

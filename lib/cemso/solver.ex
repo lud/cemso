@@ -19,12 +19,12 @@ defmodule Cemso.Solver do
 
   @impl true
   def init(opts) do
-    loader = Keyword.fetch!(opts, :loader)
+    words_table = Keyword.fetch!(opts, :words_table)
     ignore_file = Keyword.fetch!(opts, :ignore_file)
     score_adapter = Keyword.fetch!(opts, :score_adapter)
     fast = Keyword.get(opts, :fast, false)
     init_list = opts |> Keyword.fetch!(:init_list) |> from_opts()
-    :ok = WordsTable.subscribe(loader)
+    :ok = WordsTable.subscribe(words_table)
 
     {:ok,
      %{ignore_file: ignore_file, score_adapter: score_adapter, init_list: init_list, fast: fast}}
@@ -371,7 +371,11 @@ defmodule Cemso.Solver do
   end
 
   defp similar_words(parent, n_similar, known_words) do
-    selected = WordsTable.select_similar(parent.word, n_similar, known_words)
+    selected =
+      parent.word
+      |> WordsTable.select_similar(n_similar, known_words)
+      |> TopList.to_list(fn {_, word} -> word end)
+
     from_parent(selected, parent)
   end
 

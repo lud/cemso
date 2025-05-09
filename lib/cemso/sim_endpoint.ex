@@ -17,14 +17,14 @@ defmodule Cemso.SimEndpoint do
   @impl true
   def init(opts) do
     word = Keyword.fetch!(opts, :word)
-    loader = Keyword.fetch!(opts, :loader)
-    :ok = WordsTable.subscribe(loader)
+    words_table = Keyword.fetch!(opts, :words_table)
+    :ok = WordsTable.subscribe(words_table)
 
-    {:ok, %{word: word, loader: loader}, {:continue, :await_loader}}
+    {:ok, %{word: word, words_table: words_table}, {:continue, :await_table}}
   end
 
   @impl true
-  def handle_continue(:await_loader, state) do
+  def handle_continue(:await_table, state) do
     %{word: word} = state
 
     receive do

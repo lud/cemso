@@ -1,14 +1,14 @@
 defmodule Cemso.CemantixEndpoint do
   require Logger
 
-  def get_score(word) do
+  def get_score(word, logmsg \\ nil) do
     # Count in days since well-known arbitrary date
     daycount =
       DateTime.now!("Europe/Paris")
       |> DateTime.to_date()
       |> Date.diff(~D[2022-03-02])
 
-    Logger.info("Requesting score for #{inspect(word)}")
+    Logger.info(logmsg || "Requesting score for #{inspect(word)}")
     :ok = Kota.await(Cemantix.RateLimiter)
 
     Req.post("https://cemantix.certitudes.org/score",
