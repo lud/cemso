@@ -59,6 +59,10 @@ defmodule Cemso.Utils.TopList do
   def map(%__MODULE__{items: items} = toplist, f) do
     %__MODULE__{toplist | items: Enum.map(items, f)}
   end
+
+  def filter(%__MODULE__{items: items} = toplist, f) do
+    %__MODULE__{toplist | items: Enum.filter(items, f)}
+  end
 end
 
 defimpl Enumerable, for: Cemso.Utils.TopList do

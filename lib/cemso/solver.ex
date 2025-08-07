@@ -99,8 +99,6 @@ defmodule Cemso.Solver do
   # end
 
   defp loop(%{fast: false} = solver) do
-    print_scores(solver)
-
     solver = unflag_recent_attempts(solver)
 
     n_similar = @slow_n_similar
@@ -214,6 +212,13 @@ defmodule Cemso.Solver do
     score_list = Enum.reduce(new_attempts, score_list, &TopList.put(&2, &1))
 
     solver = %{solver | score_list: score_list, closed_list: closed_list}
+
+    print_scores(solver)
+
+    # Finally, discard the attempts that have been expanded fully This make that
+    # we will never select random words again after the init phase, TODO delete
+    # the random selection?
+    solver = %{solver | score_list: prune_expanded(score_list)}
 
     case check_success(solver) do
       :continue -> loop(solver)
@@ -457,5 +462,9 @@ defmodule Cemso.Solver do
     Map.update!(solver, :score_list, fn list ->
       TopList.map(list, &%Attempt{&1 | recent: false})
     end)
+  end
+
+  defp prune_expanded(score_list) do
+    TopList.filter(score_list, fn %Attempt{expanded: exp} -> exp < @slow_n_similar end)
   end
 end
