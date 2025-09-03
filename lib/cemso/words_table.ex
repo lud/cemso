@@ -33,7 +33,11 @@ defmodule Cemso.WordsTable do
   end
 
   def select_similar(word, n, ignore_list) do
-    [{^word, dimensions}] = :ets.lookup(@tab, word)
+    {^word, dimensions} =
+      case :ets.lookup(@tab, word) do
+        [{^word, dimensions}] -> {word, dimensions}
+        [] -> raise "unknown word #{word}"
+      end
 
     tl =
       select_toplist(
