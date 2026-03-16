@@ -21,6 +21,10 @@ defmodule Cemso.SourceData do
     frWac_no_postag_no_phrase_500_cbow_cut100: %{
       url: "https://embeddings.net/embeddings/frWac_no_postag_no_phrase_500_cbow_cut100.bin",
       md5: "1c852a388a9bd610f84de6bdee87d8a9"
+    },
+    frWac_no_postag_no_phrase_500_skip_cut100: %{
+      url: "https://embeddings.net/embeddings/frWac_no_postag_no_phrase_500_skip_cut100.bin",
+      md5: "54fcc1d548a3a30e8f775202cdbb476e"
     }
   }
 
