@@ -17,7 +17,7 @@ defmodule Cemso.Utils.TopList do
     Enum.map(items, mapper)
   end
 
-  def put(toplist, item) do
+  def put(%__MODULE__{} = toplist, item) do
     %__MODULE__{items: items, comp: comp, max: max} = toplist
     %__MODULE__{toplist | items: insert(items, item, max, comp)}
   end

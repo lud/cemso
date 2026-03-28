@@ -189,7 +189,7 @@ defmodule Cemso.Solver do
           closed_list = [attempt.word | closed_list]
           {valid_count, valids, closed_list}
 
-        {:score, attempt, score}, {valid_count, valids, closed_list} ->
+        {:score, %Attempt{} = attempt, score}, {valid_count, valids, closed_list} ->
           closed_list = [attempt.word | closed_list]
           attempt = %Attempt{attempt | score: score}
           {valid_count + 1, [attempt | valids], closed_list}
@@ -460,7 +460,7 @@ defmodule Cemso.Solver do
 
   defp unflag_recent_attempts(solver) do
     Map.update!(solver, :score_list, fn list ->
-      TopList.map(list, &%Attempt{&1 | recent: false})
+      TopList.map(list, fn %Attempt{} = a -> %Attempt{a | recent: false} end)
     end)
   end
 
